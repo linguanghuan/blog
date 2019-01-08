@@ -6,8 +6,19 @@
 192.168.56.101 h101   namenode
 192.168.56.102 h102   yarn datanode
 192.168.56.103 h103   datanode
-192.168.56.104 h104   datanode
+192.168.56.104 h104   datanode  （用于后续新加入节点）
 ```
+
+## 防火墙
+
+关闭防火墙
+
+ cexec systemctl stop firewalld
+
+开机禁用防火墙
+
+ cexec systemctl disable firewalld
+
 
 
 ## 新建hadoop用户
@@ -265,27 +276,7 @@ export PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
 
 
-### 指定JAVA_HOME
 
-参考：https://hadoop.apache.org/docs/r2.7.6/hadoop-project-dist/hadoop-common/SingleCluster.html
-
-```
-cd /home/hadoop/hadoop-2.7.7/etc/hadoop
-
-```
-修改以下3个文件
-
-```
-hadoop-env.sh
-mapred-env.sh 
-yarn-env.sh
-```
-
-找到JAVA_HOME的位置，修改为以下内容
-
-```
-export JAVA_HOME=/usr/local/java7/
-```
 
 
 
@@ -303,15 +294,41 @@ This command was run using /home/hadoop/hadoop-2.7.7/share/hadoop/common/hadoop-
 
 
 
-## 集群安装
+## 集群安装配置
 
 
 
 参考：
 
-https://hadoop.apache.org/docs/r2.7.6/hadoop-project-dist/hadoop-common/ClusterSetup.html
+https://blog.csdn.net/meepomiracle/article/details/81667653  (有官网文档为依据，但是启动过程没描述)
 
-https://blog.csdn.net/hwm_life/article/details/81746544
+https://www.cnblogs.com/frankdeng/p/9047698.html  （过程比较完善，版本是2.7.6，主要参考这里的步骤）
+
+
+
+### 配置JAVA_HOME
+
+参考：https://hadoop.apache.org/docs/r2.7.6/hadoop-project-dist/hadoop-common/SingleCluster.html
+
+```
+cd /home/hadoop/hadoop-2.7.7/etc/hadoop
+```
+
+修改以下3个文件
+
+```
+hadoop-env.sh
+mapred-env.sh 
+yarn-env.sh
+```
+
+找到JAVA_HOME的位置，修改为以下内容
+
+```
+export JAVA_HOME=/usr/local/java7/
+```
+
+必须配置，不配置启动会报错找不到JAVA_HOME
 
 
 
@@ -319,20 +336,16 @@ https://blog.csdn.net/hwm_life/article/details/81746544
 
 ```
 <configuration>
-    <property>
-        <name>fs.defaultFS</name>
-        <value>hdfs://h101:9000</value>
-        <description>namenode的地址</description>
-    </property>
-    <property>
-        <name>dfs.namenode.name.dir</name>
-        <value>file:////home/hadoop/run/dfs/tmp</value>
-        <description>namenode存放数据的目录</description>
-    </property>
-    <property>
-        <name>io.file.buffer.size</name>
-        <value>131072</value>
-    </property>
+<!-- 指定HDFS中NameNode的地址 -->
+     <property>
+     <name>fs.defaultFS</name>
+         <value>hdfs://h101:9000</value>
+     </property>
+<!-- 指定hadoop运行时产生文件的存储目录 -->
+     <property>
+     <name>hadoop.tmp.dir</name>
+     <value>/home/hadoop/run</value>
+     </property>
 </configuration>
 ```
 
@@ -342,36 +355,16 @@ https://blog.csdn.net/hwm_life/article/details/81746544
 
 ```
 <configuration>
-    <property>
-        <name>dfs.namenode.http-address</name>
-        <value>h101:50070</value>
-    </property>
-    <property>
-        <name>dfs.namenode.secondary.http-address</name>
-        <value>h101:50090</value>
-    </property>
+<!-- 设置dfs副本数，不设置默认是3个   -->
     <property>
         <name>dfs.replication</name>
-        <value>1</value>
-        <description>文件副本数，一般指定多个，测试指定一个</description>
+        <value>2</value>
     </property>
+<!-- 设置secondname的端口   -->
     <property>
-        <name>dfs.namenode.name.dir</name>
-        <value>file:///home/hadoop/run/dfs/name</value>
+        <name>dfs.namenode.secondary.http-address</name>
+        <value>h102:50090</value>
     </property>
-    <property>
-        <name>dfs.datanode.data.dir</name>
-        <value>file:///home/hadoop/run/dfs/data</value>
-    </property>
-    <property>
-        <name>dfs.permissions</name>
-        <value>false</value>
-    </property>
-    <property>
-        <name>dfs.blocksize</name>
-        <value>16m</value>
-    </property>
-
 </configuration>
 ```
 
@@ -383,32 +376,10 @@ https://blog.csdn.net/hwm_life/article/details/81746544
 
 ```
 <configuration>
+    <!-- 指定mr运行在yarn上 -->
     <property>
-        <name>mapreduce.framework.name</name>
-        <value>yarn</value>
-    </property>
-    <property>
-        <name>mapreduce.jobhistory.address</name>
-        <value>h102:10020</value>
-    </property>
-    <property>
-        <name>mapreduce.jobhistory.webapp.address</name>
-        <value>h102:19888</value>
-    </property>
-
-    <property>
-        <name>mapreduce.application.classpath</name>
-        <value>
-            /home/hadoop/hadoop-2.7.7/etc/hadoop,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/common/*,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/common/lib/*,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/hdfs/*,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/hdfs/lib/*,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/mapreduce/*,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/mapreduce/lib/*,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/yarn/*,
-            /home/hadoop/hadoop-2.7.7/share/hadoop/yarn/lib/*
-        </value>
+     <name>mapreduce.framework.name</name>
+     <value>yarn</value>
     </property>
 </configuration>
 ```
@@ -421,45 +392,31 @@ https://blog.csdn.net/hwm_life/article/details/81746544
 <configuration>
 
 <!-- Site specific YARN configuration properties -->
-    <property>
-        <name>yarn.resourcemanager.hostname</name>
-        <value>h102</value>
-    </property>
-    <property>
-        <name>yarn.resourcemanager.address</name>
-        <value>h102:8032</value>
-    </property>
-    <property>
-        <name>yarn.resourcemanager.resource-tracker.address</name>
-        <value>h102:8031</value>
-    </property>
-    <property>
-        <name>yarn.resourcemanager.scheduler.address</name>
-        <value>h102:8030</value>
-    </property>
-    <property>
-        <name>yarn.resourcemanager.admin.address</name>
-        <value>h102:8033</value>
-    </property>
-    <property>
-        <name>yarn.resourcemanager.webapp.address</name>
-        <value>h102:8088</value>
-    </property>
-    <property>
+
+<!-- reducer获取数据的方式 -->
+     <property>
         <name>yarn.nodemanager.aux-services</name>
         <value>mapreduce_shuffle</value>
-    </property>
-    <property>
-        <name>yarn.nodemanager.vmem-check-enabled</name>
-        <value>flase</value>
-    </property>
-    <property>
-        <name>yarn.nodemanager.vmem-pmem-ratio</name>
-        <value>6</value>
-        <description>每个任务使用的虚拟内存占物理内存的百分比</description>
-    </property>
+     </property>
+<!-- 指定YARN的ResourceManager的地址 -->
+     <property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>h102</value>
+     </property>
 </configuration>
 ```
+
+
+
+### 配置slaves
+
+```
+h102
+h103
+h104
+```
+
+
 
 
 
@@ -520,17 +477,212 @@ run目录生成一些文件
 
 
 
-## 格式化datanode
-
-https://blog.csdn.net/qq_33857413/article/details/82853037
-
-vi /home/hadoop/hadoop-2.7.7/etc/hadoop/slaves
+## 启动hdfs
 
 ```
-h102
-h103
-h104
+[hadoop@h101 hadoop]$ start-dfs.sh
+Starting namenodes on [h101]
+h101: starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h101.out
+h103: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h103.out
+h104: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h104.out
+h102: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h102.out
+Starting secondary namenodes [h102]
+h102: starting secondarynamenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-secondarynamenode-h102.out
+
 ```
+
+### 查看hdfs进程
+
+```
+[hadoop@h101 hadoop]$ which jps
+/usr/local/java7/bin/jps
+[hadoop@h101 hadoop]$ cexec /usr/local/java7/bin/jps
+************************* h *************************
+--------- h101---------
+4228 NameNode
+4475 Jps
+--------- h102---------
+2794 SecondaryNameNode
+2844 Jps
+2691 DataNode
+--------- h103---------
+2573 Jps
+2469 DataNode
+--------- h104---------
+2565 Jps
+2487 DataNode
+```
+
+### hdfs网页访问
+
+http://h101:50070/
+
+
+
+
+
+### 启动yarn
+
+```
+[hadoop@h101 hadoop]$ start-yarn.sh
+starting yarn daemons
+starting resourcemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-resourcemanager-h101.out
+h103: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h103.out
+h104: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h104.out
+h102: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h102.out
+```
+
+发现ResoureManager启动失败，进程没有起来
+
+> no resourcemanager to stop
+
+```
+[hadoop@h101 hadoop]$ stop-yarn.sh
+stopping yarn daemons
+no resourcemanager to stop
+h102: stopping nodemanager
+h104: stopping nodemanager
+h103: stopping nodemanager
+```
+
+
+
+**启动Yarn：**　注意：Namenode和ResourceManger如果不是同一台机器，不能在NameNode上启动 yarn，应该在ResouceManager所在的机器上启动yarn。
+
+
+
+因为yarn是配置在h102，所以要在h102上启动yarn
+
+那h102也要配置到其他机器的免密登录
+
+```
+[hadoop@h102 ~]$ ssh-copy-id -i .ssh/id_rsa.pub h101
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: ".ssh/id_rsa.pub"
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+hadoop@h101's password: 
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with:   "ssh 'h101'"
+and check to make sure that only the key(s) you wanted were added.
+
+[hadoop@h102 ~]$ ssh-copy-id -i .ssh/id_rsa.pub h102
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: ".ssh/id_rsa.pub"
+The authenticity of host 'h102 (192.168.56.102)' can't be established.
+ECDSA key fingerprint is SHA256:epP1OFtThjD3D1WojGrAnYkmT09fmRQWs2pdRe/BzcA.
+ECDSA key fingerprint is MD5:b8:0f:97:6b:a4:97:d5:a0:1a:dc:6d:2a:dd:26:53:a5.
+Are you sure you want to continue connecting (yes/no)? yes
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+hadoop@h102's password: 
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with:   "ssh 'h102'"
+and check to make sure that only the key(s) you wanted were added.
+
+[hadoop@h102 ~]$ ssh-copy-id -i .ssh/id_rsa.pub h103
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: ".ssh/id_rsa.pub"
+The authenticity of host 'h103 (192.168.56.103)' can't be established.
+ECDSA key fingerprint is SHA256:epP1OFtThjD3D1WojGrAnYkmT09fmRQWs2pdRe/BzcA.
+ECDSA key fingerprint is MD5:b8:0f:97:6b:a4:97:d5:a0:1a:dc:6d:2a:dd:26:53:a5.
+Are you sure you want to continue connecting (yes/no)? yes
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+hadoop@h103's password: 
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with:   "ssh 'h103'"
+and check to make sure that only the key(s) you wanted were added.
+
+[hadoop@h102 ~]$ ssh-copy-id -i .ssh/id_rsa.pub h104
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: ".ssh/id_rsa.pub"
+The authenticity of host 'h104 (192.168.56.104)' can't be established.
+ECDSA key fingerprint is SHA256:epP1OFtThjD3D1WojGrAnYkmT09fmRQWs2pdRe/BzcA.
+ECDSA key fingerprint is MD5:b8:0f:97:6b:a4:97:d5:a0:1a:dc:6d:2a:dd:26:53:a5.
+Are you sure you want to continue connecting (yes/no)? yes
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+hadoop@h104's password: 
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with:   "ssh 'h104'"
+and check to make sure that only the key(s) you wanted were added.
+
+```
+
+
+
+验证免密登录
+
+```
+[hadoop@h102 ~]$ ssh h101
+Last login: Tue Jan  8 23:59:39 2019 from h1
+[hadoop@h101 ~]$ exit
+登出
+Connection to h101 closed.
+[hadoop@h102 ~]$ ssh h102
+Last login: Wed Jan  9 00:11:54 2019 from h101
+[hadoop@h102 ~]$ exit
+登出
+Connection to h102 closed.
+[hadoop@h102 ~]$ ssh h103
+Last login: Tue Jan  8 22:04:30 2019 from h1
+[hadoop@h103 ~]$ exit
+登出
+Connection to h103 closed.
+[hadoop@h102 ~]$ ssh h104
+Last login: Tue Jan  8 22:04:31 2019 from h1
+[hadoop@h104 ~]$ exit
+登出
+Connection to h104 closed.
+```
+
+
+
+h102上启动yarn
+
+```
+[hadoop@h102 ~]$ start-yarn.sh
+starting yarn daemons
+starting resourcemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-resourcemanager-h102.out
+h104: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h104.out
+h103: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h103.out
+h102: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h102.out
+```
+
+
+
+h101上cexec查看进程
+
+hdfs和yarn都启动成功了
+
+```
+[hadoop@h101 ~]$ cexec /usr/local/java7/bin/jps
+************************* h *************************
+--------- h101---------
+4824 Jps
+4228 NameNode
+--------- h102---------
+2794 SecondaryNameNode
+4067 Jps
+3644 ResourceManager
+3755 NodeManager
+2691 DataNode
+--------- h103---------
+2882 NodeManager
+3007 Jps
+2469 DataNode
+--------- h104---------
+2900 NodeManager
+3025 Jps
+2487 DataNode
+```
+
+
 
 
 
