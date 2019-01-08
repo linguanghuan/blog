@@ -656,7 +656,7 @@ h102: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoo
 
 
 
-h101上cexec查看进程
+### h101上cexec查看yarn和hdfs进程
 
 hdfs和yarn都启动成功了
 
@@ -683,6 +683,10 @@ hdfs和yarn都启动成功了
 ```
 
 
+
+### yarn网页访问
+
+http://h102:8088/cluster/nodes
 
 
 

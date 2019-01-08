@@ -6,3 +6,5 @@
 
 [hadoop hbase zookeeper hive版本选型](hadoop hbase zookeeper hive版本选型.md)
 
+[hadoop集群安装](hadoop集群安装.md)
+
