@@ -1096,3 +1096,254 @@ starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namen
 
 
 
+### yarn高可用
+
+```
+[hadoop@h101 sbin]$ start-yarn.sh
+starting yarn daemons
+starting resourcemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-resourcemanager-h101.out
+h103: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h103.out
+h102: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h102.out
+h104: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h104.out
+[hadoop@h101 sbin]$ 
+[hadoop@h101 sbin]$ 
+[hadoop@h101 sbin]$ cexec /usr/local/java7/bin/jps
+************************* h *************************
+--------- h101---------
+9892 NameNode
+10733 Jps
+9458 DFSZKFailoverController
+9282 JournalNode
+--------- h102---------
+1550 QuorumPeerMain
+6709 NodeManager
+6070 DFSZKFailoverController
+5947 JournalNode
+5848 DataNode
+5775 NameNode
+6816 Jps
+--------- h103---------
+3353 NodeManager
+2820 DataNode
+1407 QuorumPeerMain
+3454 Jps
+2916 JournalNode
+--------- h104---------
+3037 Jps
+2936 NodeManager
+2485 DataNode
+1394 QuorumPeerMain
+```
+
+
+
+发现resourcemanager没有启动成功
+
+查看日志：
+
+```
+[hadoop@h101 logs]$ pwd
+/home/hadoop/hadoop-2.7.7/logs
+[hadoop@h101 logs]$ more yarn-hadoop-resourcemanager-h101.log
+```
+
+报错：
+
+```
+2019-01-09 22:29:35,927 INFO org.apache.hadoop.service.AbstractService: Service ResourceManager failed in state INITED; cause: org.apache.h
+adoop.yarn.exceptions.YarnRuntimeException: Invalid configuration! Can not find valid RM_HA_ID. None of yarn.resourcemanager.address.rm1 ya
+rn.resourcemanager.address.rm2  are matching the local address OR yarn.resourcemanager.ha.id is not specified in HA Configuration
+org.apache.hadoop.yarn.exceptions.YarnRuntimeException: Invalid configuration! Can not find valid RM_HA_ID. None of yarn.resourcemanager.ad
+dress.rm1 yarn.resourcemanager.address.rm2  are matching the local address OR yarn.resourcemanager.ha.id is not specified in HA Configurati
+on
+        at org.apache.hadoop.yarn.conf.HAUtil.throwBadConfigurationException(HAUtil.java:43)
+        at org.apache.hadoop.yarn.conf.HAUtil.verifyAndSetCurrentRMHAId(HAUtil.java:125)
+        at org.apache.hadoop.yarn.conf.HAUtil.verifyAndSetConfiguration(HAUtil.java:81)
+        at org.apache.hadoop.yarn.server.resourcemanager.ResourceManager.serviceInit(ResourceManager.java:228)
+        at org.apache.hadoop.service.AbstractService.init(AbstractService.java:163)
+        at org.apache.hadoop.yarn.server.resourcemanager.ResourceManager.main(ResourceManager.java:1187)
+2019-01-09 22:29:35,933 INFO org.apache.hadoop.yarn.server.resourcemanager.ResourceManager: Transitioning to standby state
+```
+
+
+
+因为yarn resourcemanager是配置在h102和h103的，所以不能再h101上启动yarn，要在h102和h103上启动
+
+```
+    <property>
+        <name>yarn.resourcemanager.ha.rm-ids</name>
+        <value>rm1,rm2</value>
+    </property>
+    <property>
+        <name>yarn.resourcemanager.hostname.rm1</name>
+        <value>h102</value>
+    </property>
+    <property>
+        <name>yarn.resourcemanager.hostname.rm2</name>
+        <value>h103</value>
+    </property>
+```
+
+[hadoop@h102 sbin]$ start-yarn.sh
+
+```
+[hadoop@h102 sbin]$ start-yarn.sh
+starting yarn daemons
+starting resourcemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-resourcemanager-h102.out
+h103: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h103.out
+h104: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h104.out
+h102: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h102.out
+```
+
+
+
+验证进程
+
+```
+[hadoop@h101 hadoop]$ cexec /usr/local/java7/bin/jps
+************************* h *************************
+--------- h101---------
+9892 NameNode
+9458 DFSZKFailoverController
+10977 Jps
+9282 JournalNode
+--------- h102---------
+7103 ResourceManager
+1550 QuorumPeerMain
+6070 DFSZKFailoverController
+7214 NodeManager
+5947 JournalNode
+5848 DataNode
+7577 Jps
+5775 NameNode
+--------- h103---------
+2820 DataNode
+1407 QuorumPeerMain
+2916 JournalNode
+3758 Jps
+3604 NodeManager
+--------- h104---------
+3313 Jps
+3187 NodeManager
+2485 DataNode
+1394 QuorumPeerMain
+```
+
+只有h102上有ResourceManager，怎么体现高可用呢？
+
+zookeeper到时多了 yarn-leader-election
+
+```
+[zk: localhost:2181(CONNECTED) 0] ls /
+[project, rmstore, yarn-leader-election, hadoop-ha, zookeeper]
+```
+
+访问
+
+http://h102:8088/
+
+点击about
+
+http://h102:8088/cluster/cluster
+
+```
+Cluster ID:	1547044705991
+ResourceManager state:	STARTED
+ResourceManager HA state:	active
+ResourceManager HA zookeeper connection state:	CONNECTED
+ResourceManager RMStateStore:	org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore
+ResourceManager started on:	星期三 一月 09 22:38:25 +0800 2019
+ResourceManager version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum d0c780b3552e7bd9462fffca3f9fc51d on 2018-07-19T00:39Z
+Hadoop version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum 792e15d20b12c74bd6f19a1fb886490 on 2018-07-18T22:47Z
+```
+
+页面上有ha和cluster的信息, h102状态为active
+
+参考：
+
+https://blog.csdn.net/qq_33161208/article/details/80925232
+
+另外一个节点h103需要手动启动
+
+```
+[hadoop@h103 ~]$ yarn-daemon.sh start resourcemanager
+starting resourcemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-resourcemanager-h103.out
+[hadoop@h103 ~]$ 
+```
+
+启动后访问h103, 状态为standby
+
+http://h103:8088/cluster/cluster
+
+```
+Cluster ID:	1547045222504
+ResourceManager state:	STARTED
+ResourceManager HA state:	standby
+ResourceManager HA zookeeper connection state:	CONNECTED
+ResourceManager RMStateStore:	org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore
+ResourceManager started on:	星期三 一月 09 22:47:02 +0800 2019
+ResourceManager version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum d0c780b3552e7bd9462fffca3f9fc51d on 2018-07-19T00:39Z
+Hadoop version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum 792e15d20b12c74bd6f19a1fb886490 on 2018-07-18T22:47Z
+```
+
+停止h102的resourcemanager（kill -9 ）
+
+```
+[hadoop@h102 hadoop]$ jps
+7653 Jps
+7103 ResourceManager
+1550 QuorumPeerMain
+6070 DFSZKFailoverController
+7214 NodeManager
+5947 JournalNode
+5848 DataNode
+5775 NameNode
+[hadoop@h102 hadoop]$ kill -9 7103
+```
+
+
+
+h103的resourcemanager就变为active了
+
+```
+http://h103:8088/cluster/cluster
+Cluster ID:	1547045347557
+ResourceManager state:	STARTED
+ResourceManager HA state:	active
+ResourceManager HA zookeeper connection state:	CONNECTED
+ResourceManager RMStateStore:	org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore
+ResourceManager started on:	星期三 一月 09 22:49:07 +0800 2019
+ResourceManager version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum d0c780b3552e7bd9462fffca3f9fc51d on 2018-07-19T00:39Z
+Hadoop version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum 792e15d20b12c74bd6f19a1fb886490 on 2018-07-18T22:47Z
+```
+
+再启动h102的rm
+
+```
+[hadoop@h102 hadoop]$ yarn-daemon.sh start resourcemanager
+starting resourcemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-resourcemanager-h102.out
+```
+
+h102变standby了
+
+```
+Cluster ID:	1547045407119
+ResourceManager state:	STARTED
+ResourceManager HA state:	standby
+ResourceManager HA zookeeper connection state:	CONNECTED
+ResourceManager RMStateStore:	org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore
+ResourceManager started on:	星期三 一月 09 22:50:07 +0800 2019
+ResourceManager version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum d0c780b3552e7bd9462fffca3f9fc51d on 2018-07-19T00:39Z
+Hadoop version:	2.7.7 from c1aad84bd27cd79c3d1a7dd58202a8c3ee1ed3ac by stevel source checksum 792e15d20b12c74bd6f19a1fb886490 on 2018-07-18T22:47Z
+```
+
+也可以命令查看状态
+
+```
+[hadoop@h102 hadoop]$ yarn rmadmin -getServiceState rm1
+standby
+[hadoop@h102 hadoop]$ yarn rmadmin -getServiceState rm2
+active
+```
+
+https://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/ResourceManagerHA.html
