@@ -690,6 +690,41 @@ http://h102:8088/cluster/nodes
 
 
 
+## 关闭hdfs
+
+**h101**上执行stop-dfs.sh
+
+```
+[hadoop@h101 ~]$ stop-dfs.sh
+Stopping namenodes on [h101]
+h101: stopping namenode
+h102: stopping datanode
+h104: stopping datanode
+h103: stopping datanode
+Stopping secondary namenodes [h102]
+h102: stopping secondarynamenode
+```
+
+
+
+## 关闭yarn
+
+**h102**上执行stop-yarn.sh
+
+```
+[hadoop@h102 ~]$ stop-yarn.sh
+stopping yarn daemons
+stopping resourcemanager
+h102: stopping nodemanager
+h103: stopping nodemanager
+h104: stopping nodemanager
+no proxyserver to stop
+```
+
+
+
+
+
 
 
 
