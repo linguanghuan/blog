@@ -722,7 +722,13 @@ no proxyserver to stop
 ```
 
 
+## 参考
 
+https://blog.csdn.net/meepomiracle/article/details/81667653  (有官网文档为依据，但是启动过程没描述)
+
+https://www.cnblogs.com/frankdeng/p/9047698.html  （过程比较完善，版本是2.7.6，主要参考这里的步骤）
+
+[CentOS7.5搭建Hadoop2.7.6完全分布式集群](CentOS7.5搭建Hadoop2.7.6完全分布式集群.html)
 
 
 

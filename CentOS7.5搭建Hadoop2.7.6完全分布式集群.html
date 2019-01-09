@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body>
+<div id="topics">
+	<div class="post">
+		<h1 class="postTitle">
+			<a id="cb_post_title_url" class="postTitle2" href="https://www.cnblogs.com/frankdeng/p/9047698.html">Hadoop（二）CentOS7.5搭建Hadoop2.7.6完全分布式集群</a>
+		</h1>
+		<div class="clear"></div>
+		<div class="postBody">
+			<div id="cnblogs_post_body" class="blogpost-body"><h2 id="blogTitle0"><strong>一 完全分布式集群(单点）</strong></h2>
+<p><strong>Hadoop官方地址：<a href="http://hadoop.apache.org/" target="_blank">http://hadoop.apache.org/</a></strong></p>
+<h2 id="blogTitle1"><strong>1&nbsp; 准备3台客户机</strong></h2>
+<h3 id="blogTitle2"><strong>1.1</strong><strong>防火墙,静态IP,主机名</strong></h3>
+<p>关闭防火墙，设置静态IP，主机名此处略，参考&nbsp;&nbsp;<a id="cb_post_title_url" class="postTitle2" href="https://www.cnblogs.com/frankdeng/p/9027037.html" target="_blank">Linux之CentOS7.5安装及克隆</a></p>
+<h3 id="blogTitle3"><strong>1.2 修改host文件</strong></h3>
+<p data-mce-="">我们希望三个主机之间都能够使用主机名称的方式相互访问而不是IP，我们需要在hosts中配置其他主机的host。因此我们在主机的/etc/hosts下均进行如下配置：</p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[root@node21 ~]# vi /etc/<span style="color: #000000;">hosts
+配置主机host
+</span><span style="color: #800080;">127.0</span>.<span style="color: #800080;">0.1</span><span style="color: #000000;"> localhost localhost.localdomain localhost4 localhost4.localdomain4
+::</span><span style="color: #800080;">1</span><span style="color: #000000;"> localhost localhost.localdomain localhost6 localhost6.localdomain6
+</span><span style="color: #800080;">192.168</span>.<span style="color: #800080;">100.21</span><span style="color: #000000;"> node21
+</span><span style="color: #800080;">192.168</span>.<span style="color: #800080;">100.22</span><span style="color: #000000;"> node22
+</span><span style="color: #800080;">192.168</span>.<span style="color: #800080;">100.23</span><span style="color: #000000;"> node23
+将配置发送到其他主机（同时在其他主机上配置）
+[root@node21 </span>~]# scp -r /etc/hosts root@node22:/etc/<span style="color: #000000;">
+[root@node21 </span>~]# scp -r /etc/hosts root@node23:/etc/<span style="color: #000000;">
+测试
+[root@node21 </span>~<span style="color: #000000;">]# ping node21
+[root@node21 </span>~<span style="color: #000000;">]# ping node22
+[root@node21 </span>~]# ping node23</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle4">1.3 添加用户账号</h3>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre><span style="color: #000000;">在所有的主机下均建立一个账号admin用来运行hadoop ，并将其添加至sudoers中
+[root@node21 </span>~<span style="color: #000000;">]# useradd admin    添加用户通过手动输入修改密码
+[root@node21 </span>~<span style="color: #000000;">]# passwd  admin  更改用户 admin 的密码
+</span><span style="color: #800080;">123456</span><span style="color: #000000;">  passwd： 所有的身份验证令牌已经成功更新。
+设置admin用户具有root权限  修改 </span>/etc/<span style="color: #000000;">sudoers 文件，找到下面一行，在root下面添加一行，如下所示：
+[root@node21 </span>~<span style="color: #000000;">]# visudo
+## Allow root to run any commands anywhere
+root    ALL</span>=<span style="color: #000000;">(ALL)     ALL
+admin   ALL</span>=<span style="color: #000000;">(ALL)     ALL
+修改完毕  ：wq！ 保存退出，现在可以用admin帐号登录，然后用命令 su </span>- ，切换用户即可获得root权限进行操作。　</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle5">1.4 /opt<span style="font-family: 宋体;">目录</span><span style="font-family: 宋体;">下创建文件夹</span></h3>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre><span style="color: #800080;">1</span><span style="color: #000000;">）在root用户下创建module、software文件夹
+[root@node21 opt]# mkdir module
+[root@node21 opt]# mkdir software
+</span><span style="color: #800080;">2</span><span style="color: #000000;">）修改module、software文件夹的所有者
+[root@node21 opt]# chown admin:admin module
+[root@node21 opt]# chown admin:admin software
+</span><span style="color: #800080;">3</span><span style="color: #000000;">）查看module、software文件夹的所有者
+[root@node21 opt]# ll
+total </span><span style="color: #800080;">0</span><span style="color: #000000;">
+drwxr</span>-xr-x. <span style="color: #800080;">5</span> admin admin <span style="color: #800080;">64</span> May <span style="color: #800080;">27</span> <span style="color: #800080;">00</span>:<span style="color: #800080;">24</span><span style="color: #000000;"> module
+drwxr</span>-xr-x. <span style="color: #800080;">2</span> admin admin <span style="color: #800080;">267</span> May <span style="color: #800080;">26</span> <span style="color: #800080;">11</span>:<span style="color: #800080;">56</span> software</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h2 id="blogTitle6">2&nbsp; &nbsp;安装配置jdk1.8</h2>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[deng@node21 ~]# rpm -qa|<span style="color: #000000;">grep java   #查询是否安装java软件：
+[deng@node21 </span>~]# rpm -e –nodeps 软件包   #如果安装的版本低于1.<span style="color: #800080;">7</span><span style="color: #000000;">，卸载该jdk
+在线安装   wget </span>--no-check-certificate --no-cookies --header <span style="color: #800000;">"</span><span style="color: #800000;">Cookie: oraclelicense=accept-securebackup-cookie</span><span style="color: #800000;">"</span>  http:<span style="color: #008000;">//</span><span style="color: #008000;">download.oracle.com/otn/java/jdk/8u144-b01/090f390dda5b47b9b721c7dfaa008135/jdk-8u144-linux-x64.tar.gz</span>
+这里使用本地下载然后 xftp上传到  /opt/software/<span style="color: #000000;"> 下 
+[root@node21 software]# tar zxvf  jdk</span>-8u171-linux-x64.tar.gz  -C  /opt/module/<span style="color: #000000;">
+[root@node21 module]# mv jdk1.</span><span style="color: #800080;">8</span>.0_171 jdk1.<span style="color: #800080;">8</span><span style="color: #000000;">
+设置JAVA_HOME  
+vi </span>/etc/<span style="color: #000000;">profile
+export  JAVA_HOME</span>=/opt/module/jdk1.<span style="color: #800080;">8</span><span style="color: #000000;">
+export  PATH</span>=$PATH:$JAVA_HOME/bin:$JAVA_HOME/<span style="color: #000000;">sbin
+source  </span>/etc/<span style="color: #000000;">profile
+向其他节点复制jdk
+[root@node21 </span>~]# scp -r /opt/module/jdk1.<span style="color: #800080;">8</span><span style="color: #000000;"> root@node22:`pwd`
+[root@node21 </span>~]# scp -r /opt/module/jdk1.<span style="color: #800080;">8</span><span style="color: #000000;"> root@node23:`pwd`
+配置各个主机下jdk的环境变量，由于我的电脑上linux都是新安装的，环境变量相同，因此直接复制到了其他主机上。如果不同的主机的环境变量不同，请手动设置
+[root@node21 </span>~]# scp /etc/profile root@node22:/etc/<span style="color: #000000;">
+[root@node21 </span>~]# scp /etc/profile root@node23:/etc/<span style="color: #000000;">
+在每个主机上都重新编译一下</span>/etc/<span style="color: #000000;">profile
+[root@node21]# source </span>/etc/<span style="color: #000000;">profile
+测试  java </span>-version</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h2 id="blogTitle7">3&nbsp; &nbsp;安装hadoop集群</h2>
+<h3 id="blogTitle8"><strong>3.1&nbsp;</strong>集群部署规划</h3>
+<table style="height: 88px; background-color: #3ebec1;" border="1" align="center">
+<tbody>
+<tr>
+<td style="text-align: center;">节点名称</td>
+<td style="text-align: center;">&nbsp;NN1</td>
+<td style="text-align: center;">&nbsp;NN2</td>
+<td style="text-align: center;">&nbsp;DN</td>
+<td style="text-align: center;">&nbsp;RM</td>
+<td style="text-align: center;">&nbsp;NM</td>
+</tr>
+<tr>
+<td style="text-align: center;">node21</td>
+<td style="text-align: center;">NameNode&nbsp;&nbsp;</td>
+<td style="text-align: center;">&nbsp;</td>
+<td style="text-align: center;">DataNode</td>
+<td style="text-align: center;">&nbsp;</td>
+<td style="text-align: center;">NodeManager</td>
+</tr>
+<tr>
+<td style="text-align: center;">node22</td>
+<td style="text-align: center;">&nbsp;</td>
+<td style="text-align: center;">SecondaryNameNode</td>
+<td style="text-align: center;">DataNode</td>
+<td style="text-align: center;">ResourceManager</td>
+<td style="text-align: center;">NodeManager</td>
+</tr>
+<tr>
+<td style="text-align: center;">node23</td>
+<td style="text-align: center;">&nbsp;</td>
+<td style="text-align: center;">&nbsp;</td>
+<td style="text-align: center;">DataNode</td>
+<td style="text-align: center;">&nbsp;</td>
+<td style="text-align: center;">NodeManager</td>
+</tr>
+</tbody>
+</table>
+<h3 id="blogTitle9">3.2&nbsp;<strong><code class="hljs ruby" data-mce-="">设置SSH免密钥</code></strong></h3>
+<p>关于ssh免密码的设置，要求每两台主机之间设置免密码，自己的主机与自己的主机之间也要求设置免密码。 这项操作可以在admin用户下执行，执行完毕公钥在/home/admin/.ssh/id_rsa.pub</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]# ssh-keygen -<span>t rsa
+[admin@node21 ~]# ssh-copy-<span>id node21
+[admin@node21 ~]# ssh-copy-<span>id node22
+[admin@node21 ~]# ssh-copy-id node23</span></span></span></pre>
+</div>
+<p class="brush:bash;gutter:true;"><strong>node1与node2为namenode节点要相互免秘钥&nbsp; &nbsp;HDFS的HA</strong></p>
+<div class="cnblogs_code">
+<pre>[admin@node22 ~]# ssh-keygen -<span>t rsa
+[admin@node22 ~]# ssh-copy-<span>id node22
+[admin@node22 ~]# ssh-copy-<span>id node21
+[admin@node22 ~]# ssh-copy-id node23</span></span></span></pre>
+</div>
+<p><strong>node2与node3为yarn节点要相互免秘钥&nbsp; YARN的HA</strong></p>
+<div class="cnblogs_code">
+<pre>[admin@node23 ~]# ssh-keygen -<span>t rsa
+[admin@node23 ~]# ssh-copy-<span>id node23
+[admin@node23 ~]# ssh-copy-<span>id node21
+[admin@node23 ~]# ssh-copy-id node22　</span></span></span></pre>
+</div>
+<h3 id="blogTitle10">3.3&nbsp; 解压安装hadoop</h3>
+<div class="cnblogs_code">
+<pre>[admin@node21 software]# tar zxvf hadoop-2.7.6.tar.gz -C /opt/module/</pre>
+</div>
+<h2 id="blogTitle11">4&nbsp; &nbsp;配置hadoop集群</h2>
+<p><span style="color: #ff0000;">注意：配置文件在hadoop2.7.6/etc/hadoop/下</span></p>
+<h3 id="blogTitle12"><strong>4.1 修改core-site.xml</strong></h3>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 hadoop]$ vi core-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- 指定HDFS中NameNode的地址 --&gt;
+     &lt;property&gt;
+     &lt;name&gt;fs.defaultFS&lt;/name&gt;
+         &lt;value&gt;hdfs:<span style="color: #008000;">//</span><span style="color: #008000;">node21:9000&lt;/value&gt;</span>
+     &lt;/property&gt;
+&lt;!-- 指定hadoop运行时产生文件的存储目录 --&gt;
+     &lt;property&gt;
+     &lt;name&gt;hadoop.tmp.dir&lt;/name&gt;
+     &lt;value&gt;/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/data/full/tmp&lt;/value&gt;
+     &lt;/property&gt;
+&lt;/configuration&gt;</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle13">4.2 修改hadoop-env.sh</h3>
+<div class="cnblogs_code">
+<pre>[admin@node21  hadoop]$ vi hadoop-<span style="color: #000000;">env.sh 
+修改 export JAVA_HOME</span>=/opt/module/jdk1.<span style="color: #800080;">8</span></pre>
+</div>
+<h3 id="blogTitle14">4.3 修改hdfs-site.xml</h3>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21  hadoop]$ vi hdfs-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- 设置dfs副本数，不设置默认是3个   --&gt;
+    &lt;property&gt;
+        &lt;name&gt;dfs.replication&lt;/name&gt;
+        &lt;value&gt;<span style="color: #800080;">2</span>&lt;/value&gt;
+    &lt;/property&gt;
+&lt;!-- 设置secondname的端口   --&gt;
+    &lt;property&gt;
+        &lt;name&gt;dfs.namenode.secondary.http-address&lt;/name&gt;
+        &lt;value&gt;node22:<span style="color: #800080;">50090</span>&lt;/value&gt;
+    &lt;/property&gt;
+&lt;/configuration&gt;</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle15">4.4 修改slaves</h3>
+<div class="cnblogs_code">
+<pre><span style="color: #000000;">[admin@node21  hadoop]$ vi slaves
+node21
+node22
+node23</span></pre>
+</div>
+<h3 id="blogTitle16">4.5 修改mapred-env.sh</h3>
+<div class="cnblogs_code">
+<pre>[admin@node21 hadoop]$ vi mapred-<span style="color: #000000;">env.sh
+修改 export JAVA_HOME</span>=/opt/module/jdk1.<span style="color: #800080;">8</span></pre>
+</div>
+<h3 id="blogTitle17">4.6 修改mapred-site.xml</h3>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 hadoop]# mv mapred-site.xml.template mapred-<span style="color: #000000;">site.xml
+[admin@node21 hadoop]$ vi mapred</span>-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- 指定mr运行在yarn上 --&gt;
+    &lt;property&gt;
+     &lt;name&gt;mapreduce.framework.name&lt;/name&gt;
+     &lt;value&gt;yarn&lt;/value&gt;
+    &lt;/property&gt;
+&lt;/configuration&gt;</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle18">4.7 修改yarn-env.sh</h3>
+<div class="cnblogs_code">
+<pre>[admin@node21 hadoop]$ vi yarn-<span style="color: #000000;">env.sh
+修改 export JAVA_HOME</span>=/opt/module/jdk1.<span style="color: #800080;">8</span></pre>
+</div>
+<h3 id="blogTitle19">4.8 修改yarn-site.xml</h3>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 hadoop]$ vi yarn-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- reducer获取数据的方式 --&gt;
+     &lt;property&gt;
+        &lt;name&gt;yarn.nodemanager.aux-services&lt;/name&gt;
+        &lt;value&gt;mapreduce_shuffle&lt;/value&gt;
+     &lt;/property&gt;
+&lt;!-- 指定YARN的ResourceManager的地址 --&gt;
+     &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.hostname&lt;/name&gt;
+        &lt;value&gt;node22&lt;/value&gt;
+     &lt;/property&gt;
+&lt;/configuration&gt;</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle20">4.9 分发hadoop到节点</h3>
+<div class="cnblogs_code">
+<pre>[admin@node21 module]# scp -r hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/<span style="color: #000000;"> admin@node22:`pwd`
+[admin@node21 module]# scp </span>-r hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/ admin@node23:`pwd`</pre>
+</div>
+<h3 id="blogTitle21">4.10 配置环境变量</h3>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ sudo vi /etc/<span style="color: #000000;">profile
+末尾追加
+export  HADOOP_HOME</span>=/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span><span style="color: #000000;">
+export PATH</span>=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/<span style="color: #000000;">sbin
+编译生效  source  </span>/etc/profile</pre>
+</div>
+<h2 id="blogTitle22">5&nbsp; 启动验证集群</h2>
+<h3 id="blogTitle23">5.1 启动集群</h3>
+<p><strong>&nbsp;如果集群是第一次启动，需要格式化namenode</strong></p>
+<div class="cnblogs_code">
+<pre>[admin@node21 hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>]$ hdfs namenode -format　</pre>
+</div>
+<p><img src="images/1385722-20180528195140937-535707601.png" alt=""></p>
+<p><strong>启动Hdfs：</strong></p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 ~]# start-<span style="color: #000000;">dfs.sh
+Starting namenodes on [node21]
+node21: starting namenode, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/hadoop-root-namenode-node21.<span style="color: #0000ff;">out</span><span style="color: #000000;">
+node21: starting datanode, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/hadoop-root-datanode-node21.<span style="color: #0000ff;">out</span><span style="color: #000000;">
+node22: starting datanode, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/hadoop-root-datanode-node22.<span style="color: #0000ff;">out</span><span style="color: #000000;">
+node23: starting datanode, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/hadoop-root-datanode-node23.<span style="color: #0000ff;">out</span><span style="color: #000000;">
+Starting secondary namenodes [node22]
+node22: starting secondarynamenode, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/hadoop-root-secondarynamenode-node22.<span style="color: #0000ff;">out</span></pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p><strong>启动Yarn：</strong>　注意：Namenode和ResourceManger如果不是同一台机器，不能在NameNode上启动 yarn，应该在ResouceManager所在的机器上启动yarn。</p>
+<div class="cnblogs_code">
+<pre>[admin@node22 ~]# start-<span style="color: #000000;">yarn.sh
+starting yarn daemons
+starting resourcemanager, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/yarn-root-resourcemanager-node22.<span style="color: #0000ff;">out</span><span style="color: #000000;">
+node21: starting nodemanager, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/yarn-root-nodemanager-node21.<span style="color: #0000ff;">out</span><span style="color: #000000;">
+node23: starting nodemanager, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/yarn-root-nodemanager-node23.<span style="color: #0000ff;">out</span><span style="color: #000000;">
+node22: starting nodemanager, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/yarn-root-nodemanager-node22.<span style="color: #0000ff;">out</span></pre>
+</div>
+<p>jps查看进程</p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 ~<span style="color: #000000;">]# jps
+</span><span style="color: #800080;">1440</span><span style="color: #000000;"> NameNode
+</span><span style="color: #800080;">1537</span><span style="color: #000000;"> DataNode
+</span><span style="color: #800080;">1811</span><span style="color: #000000;"> NodeManager
+</span><span style="color: #800080;">1912</span><span style="color: #000000;"> Jps
+[admin@node22 </span>~<span style="color: #000000;">]# jps
+</span><span style="color: #800080;">1730</span><span style="color: #000000;"> Jps
+</span><span style="color: #800080;">1339</span><span style="color: #000000;"> ResourceManager
+</span><span style="color: #800080;">1148</span><span style="color: #000000;"> DataNode
+</span><span style="color: #800080;">1198</span><span style="color: #000000;"> SecondaryNameNode
+</span><span style="color: #800080;">1439</span><span style="color: #000000;"> NodeManager
+[admin@node23 </span>~<span style="color: #000000;">]# jps
+</span><span style="color: #800080;">1362</span><span style="color: #000000;"> Jps
+</span><span style="color: #800080;">1149</span><span style="color: #000000;"> DataNode
+</span><span style="color: #800080;">1262</span> NodeManager</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p>web页面访问</p>
+<p><img src="images/1385722-20180528200738376-1250319081.png" alt=""></p>
+<h3 id="blogTitle24">5.2 Hadoop启动停止方式</h3>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre><span style="color: #800080;">1</span><span style="color: #000000;">）各个服务组件逐一启动
+分别启动hdfs组件： hadoop</span>-daemon.sh  start|stop  namenode|datanode|<span style="color: #000000;">secondarynamenode
+   启动yarn：     yarn</span>-daemon.sh    start|stop  resourcemanager|<span style="color: #000000;">nodemanager
+
+</span><span style="color: #800080;">2</span><span style="color: #000000;">）各个模块分开启动（配置ssh是前提）常用
+start</span>|stop-dfs.sh     start|stop-<span style="color: #000000;">yarn.sh
+
+</span><span style="color: #800080;">3</span><span style="color: #000000;">）全部启动（不建议使用）
+start</span>|stop-all.sh</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle25">5.3 集群时间同步</h3>
+<p>&nbsp;参考Ntp时间服务器与定时任务Crontab&nbsp; &nbsp;&nbsp;&nbsp;<a href="https://www.cnblogs.com/frankdeng/p/9005691.html" target="_blank">https://www.cnblogs.com/frankdeng/p/9005691.html</a></p>
+<h2 id="blogTitle26"><strong>二 完全分布式集群（HA）</strong></h2>
+<h2 id="blogTitle27"><span style="font-size: 16px;"><strong>1 环境准备</strong></span></h2>
+<p>1.1&nbsp;修改IP</p>
+<p>1.2 修改主机名及主机名和IP地址的映射</p>
+<p>1.3&nbsp;关闭防火墙</p>
+<p>1.4&nbsp;ssh免密登录</p>
+<p>1.5&nbsp;安装JDK，配置环境变量</p>
+<h2 id="blogTitle28"><strong><span style="font-size: 16px;">2 集群规划</span></strong></h2>
+<table style="background-color: #4fb0ac; height: 88px; width: 635px;" border="1" align="center">
+<tbody>
+<tr>
+<td style="text-align: center;">节点名称</td>
+<td style="text-align: center;">NN</td>
+<td style="text-align: center;">JJN</td>
+<td style="text-align: center;">DN</td>
+<td style="text-align: center;">ZKFC</td>
+<td style="text-align: center;">ZK</td>
+<td style="text-align: center;">RM</td>
+<td style="text-align: center;">NM</td>
+</tr>
+<tr>
+<td>node21</td>
+<td>NameNode</td>
+<td>JournalNode</td>
+<td>DataNode</td>
+<td>ZKFC</td>
+<td>Zookeeper</td>
+<td>&nbsp;</td>
+<td>NodeManager</td>
+</tr>
+<tr>
+<td>node22</td>
+<td>NameNode</td>
+<td>JournalNode</td>
+<td>DataNode</td>
+<td>ZKFC</td>
+<td>ZooKeeper</td>
+<td>ResourceManager</td>
+<td>NodeManager</td>
+</tr>
+<tr>
+<td>node23</td>
+<td>&nbsp;</td>
+<td>JournalNode</td>
+<td>DataNode</td>
+<td>&nbsp;</td>
+<td>ZooKeeper</td>
+<td>ResourceManager</td>
+<td>NodeManager</td>
+</tr>
+</tbody>
+</table>
+<h2 id="blogTitle29"><span style="font-size: 16px;"><strong>3 安装</strong>Zookeeper集群</span></h2>
+<p>安装详解参考 ：&nbsp;<a id="cb_post_title_url" class="postTitle2" href="https://www.cnblogs.com/frankdeng/p/9018177.html" target="_blank">CentOS7.5搭建Zookeeper集群与命令行操作</a></p>
+<h2 id="blogTitle30"><span style="font-size: 16px;"><strong>4 安装配置Hadoop集群</strong></span></h2>
+<h3 id="blogTitle31">4.1 解压安装Hadoop</h3>
+<p><span style="font-size: 16px;"><span style="font-family: 宋体;">解压</span>&nbsp;hadoop-2.7.6<span style="font-family: 宋体;">到</span>/opt/module/目录<span style="font-family: 宋体;">下</span></span></p>
+<div class="cnblogs_code">
+<pre>[admin@node21 software]# tar zxvf hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>.tar.gz -C /opt/module/</pre>
+</div>
+<h3 id="blogTitle32">4.2 配置Hadoop集群</h3>
+<p>配置文件都在/opt/module/hadoop-2.7.6/etc/hadoop/下</p>
+<p><span style="font-size: 16px;"><strong>4.2.1</strong> 修改<strong>hadoop-env.sh</strong>，<strong>&nbsp;mapred-env.sh ，yarn-env.sh 的JAVA环境变量</strong></span></p>
+<div class="cnblogs_code">
+<pre>export JAVA_HOME=/opt/module/jdk1.<span style="color: #800080;">8</span></pre>
+</div>
+<p><span style="font-size: 16px;"><strong>4.2.2</strong> 修改<strong>&nbsp;core-site.xml</strong></span></p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 hadoop]$ vi core-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- 把两个NameNode的地址组装成一个集群mycluster --&gt;
+&lt;property&gt;
+   &lt;name&gt;fs.defaultFS&lt;/name&gt;
+   &lt;value&gt;hdfs:<span style="color: #008000;">//</span><span style="color: #008000;">mycluster&lt;/value&gt;</span>
+&lt;/property&gt;
+&lt;!-- 指定hadoop运行时产生文件的存储目录 --&gt;
+&lt;property&gt;
+  &lt;name&gt;hadoop.tmp.dir&lt;/name&gt;
+  &lt;value&gt;/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/data/ha/tmp&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 指定ZKFC故障自动切换转移 --&gt;
+&lt;property&gt;
+     &lt;name&gt;ha.zookeeper.quorum&lt;/name&gt;
+     &lt;value&gt;node21:<span style="color: #800080;">2181</span>,node22:<span style="color: #800080;">2181</span>,node23:<span style="color: #800080;">2181</span>&lt;/value&gt;
+&lt;/property&gt;
+&lt;/configuration&gt;　</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p><span style="font-size: 16px;"><strong><span style="font-family: 宋体;">4.2.3 修改</span>hdfs-site.xml</strong></span></p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21  hadoop]$ vi hdfs-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- 设置dfs副本数，默认3个 --&gt;
+&lt;property&gt;
+&lt;name&gt;dfs.replication&lt;/name&gt;
+&lt;value&gt;<span style="color: #800080;">2</span>&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 完全分布式集群名称 --&gt;
+&lt;property&gt;
+  &lt;name&gt;dfs.nameservices&lt;/name&gt;
+  &lt;value&gt;mycluster&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 集群中NameNode节点都有哪些 --&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.ha.namenodes.mycluster&lt;/name&gt;
+   &lt;value&gt;nn1,nn2&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- nn1的RPC通信地址 --&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.namenode.rpc-address.mycluster.nn1&lt;/name&gt;
+   &lt;value&gt;node21:<span style="color: #800080;">8020</span>&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- nn2的RPC通信地址 --&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.namenode.rpc-address.mycluster.nn2&lt;/name&gt;
+   &lt;value&gt;node22:<span style="color: #800080;">8020</span>&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- nn1的http通信地址 --&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.namenode.http-address.mycluster.nn1&lt;/name&gt;
+   &lt;value&gt;node21:<span style="color: #800080;">50070</span>&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- nn2的http通信地址 --&gt;
+&lt;property&gt;
+    &lt;name&gt;dfs.namenode.http-address.mycluster.nn2&lt;/name&gt;
+    &lt;value&gt;node22:<span style="color: #800080;">50070</span>&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 指定NameNode元数据在JournalNode上的存放位置 --&gt;
+&lt;property&gt;
+    &lt;name&gt;dfs.namenode.shared.edits.dir&lt;/name&gt;
+    &lt;value&gt;qjournal:<span style="color: #008000;">//</span><span style="color: #008000;">node21:8485;node22:8485;node23:8485/mycluster&lt;/value&gt;</span>
+&lt;/property&gt;
+&lt;!-- 配置隔离机制，即同一时刻只能有一台服务器对外响应 --&gt;
+&lt;property&gt;
+    &lt;name&gt;dfs.ha.fencing.methods&lt;/name&gt;
+    &lt;value&gt;sshfence&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 使用隔离机制时需要ssh无秘钥登录--&gt;
+&lt;property&gt;
+    &lt;name&gt;dfs.ha.fencing.ssh.<span style="color: #0000ff;">private</span>-key-files&lt;/name&gt;
+    &lt;value&gt;/home/admin/.ssh/id_rsa&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 声明journalnode服务器存储目录--&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.journalnode.edits.dir&lt;/name&gt;
+   &lt;value&gt;/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/data/ha/jn&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 关闭权限检查--&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.permissions.enable&lt;/name&gt;
+   &lt;value&gt;<span style="color: #0000ff;">false</span>&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 访问代理类：client，mycluster，active配置失败自动切换实现方式--&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.client.failover.proxy.provider.mycluster&lt;/name&gt;
+   &lt;value&gt;org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider&lt;/value&gt;
+&lt;/property&gt;
+&lt;!-- 配置自动故障转移--&gt;
+&lt;property&gt;
+   &lt;name&gt;dfs.ha.automatic-failover.enabled&lt;/name&gt;
+   &lt;value&gt;<span style="color: #0000ff;">true</span>&lt;/value&gt;
+&lt;/property&gt;　
+&lt;configuration&gt;</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p><span style="font-size: 16px;"><strong>4.2.4 修改mapred-site.xml</strong></span></p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node1 hadoop]# mv mapred-site.xml.template mapred-<span style="color: #000000;">site.xml
+[admin@node1 hadoop]# vi  mapred</span>-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- 指定mr框架为yarn方式 --&gt;
+　&lt;property&gt;
+　　&lt;name&gt;mapreduce.framework.name&lt;/name&gt;
+　　&lt;value&gt;yarn&lt;/value&gt;
+　&lt;/property&gt;
+&lt;!-- 指定mr历史服务器主机,端口 --&gt;
+  &lt;property&gt;   
+    &lt;name&gt;mapreduce.jobhistory.address&lt;/name&gt;   
+    &lt;value&gt;node21:<span style="color: #800080;">10020</span>&lt;/value&gt;   
+  &lt;/property&gt;   
+&lt;!-- 指定mr历史服务器WebUI主机,端口 --&gt;
+  &lt;property&gt;   
+    &lt;name&gt;mapreduce.jobhistory.webapp.address&lt;/name&gt;   
+    &lt;value&gt;node21:<span style="color: #800080;">19888</span>&lt;/value&gt;   
+  &lt;/property&gt;
+&lt;!-- 历史服务器的WEB UI上最多显示20000个历史的作业记录信息 --&gt;    
+  &lt;property&gt;
+    &lt;name&gt;mapreduce.jobhistory.joblist.cache.size&lt;/name&gt;
+    &lt;value&gt;<span style="color: #800080;">20000</span>&lt;/value&gt;
+  &lt;/property&gt;
+&lt;!--配置作业运行日志 --&gt; 
+  &lt;property&gt;
+    &lt;name&gt;mapreduce.jobhistory.done-dir&lt;/name&gt;
+    &lt;value&gt;${yarn.app.mapreduce.am.staging-dir}/history/done&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;mapreduce.jobhistory.intermediate-done-dir&lt;/name&gt;
+    &lt;value&gt;${yarn.app.mapreduce.am.staging-dir}/history/done_intermediate&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.app.mapreduce.am.staging-dir&lt;/name&gt;
+    &lt;value&gt;/tmp/hadoop-yarn/staging&lt;/value&gt;
+  &lt;/property&gt;
+&lt;/configuration&gt;</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p><span style="font-size: 16px;"><strong>4.2.5 修改</strong>&nbsp;<strong>slaves</strong></span></p>
+<div class="cnblogs_code">
+<pre><span style="color: #000000;">[admin@node21  hadoop]$ vi slaves
+node21
+node22
+node23</span></pre>
+</div>
+<p><span style="font-size: 16px;"><strong>4.2.6 修改yarn-site.xml　</strong></span></p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 hadoop]$ vi yarn-<span style="color: #000000;">site.xml
+</span>&lt;configuration&gt;
+&lt;!-- reducer获取数据的方式 --&gt;
+ &lt;property&gt;
+        &lt;name&gt;yarn.nodemanager.aux-services&lt;/name&gt;
+        &lt;value&gt;mapreduce_shuffle&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;!--启用resourcemanager ha--&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.ha.enabled&lt;/name&gt;
+        &lt;value&gt;<span style="color: #0000ff;">true</span>&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;!--声明两台resourcemanager的地址--&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.cluster-id&lt;/name&gt;
+        &lt;value&gt;rmCluster&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.ha.rm-ids&lt;/name&gt;
+        &lt;value&gt;rm1,rm2&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.hostname.rm1&lt;/name&gt;
+        &lt;value&gt;node22&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.hostname.rm2&lt;/name&gt;
+        &lt;value&gt;node23&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;!--指定zookeeper集群的地址--&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.zk-address&lt;/name&gt;
+        &lt;value&gt;node21:<span style="color: #800080;">2181</span>,node22:<span style="color: #800080;">2181</span>,node23:<span style="color: #800080;">2181</span>&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;!--启用自动恢复--&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.recovery.enabled&lt;/name&gt;
+        &lt;value&gt;<span style="color: #0000ff;">true</span>&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;!--指定resourcemanager的状态信息存储在zookeeper集群--&gt;
+    &lt;property&gt;
+        &lt;name&gt;yarn.resourcemanager.store.<span style="color: #0000ff;">class</span>&lt;/name&gt;    
+        &lt;value&gt;org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore&lt;/value&gt;
+    &lt;/property&gt;
+&lt;/configuration&gt;</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p><strong><span style="font-size: 16px;">4.2.6 拷贝hadoop<span style="font-family: 宋体;">到其他节点</span></span></strong></p>
+<div class="cnblogs_code">
+<pre>[admin@node21 module]# scp -r hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/ admin@node22:/opt/module/<span style="color: #000000;">
+[admin@node21 module]# scp </span>-r hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/ admin@node23:/opt/module/</pre>
+</div>
+<p><strong><span style="font-size: 16px;">4.2.7 配置Hadoop环境变量</span></strong></p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ sudo vi /etc/<span style="color: #000000;">profile
+末尾追加
+export  HADOOP_HOME</span>=/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span><span style="color: #000000;">
+export PATH</span>=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/<span style="color: #000000;">sbin
+编译生效  source  </span>/etc/profile</pre>
+</div>
+<h2 id="blogTitle33"><span style="font-size: 16px;">5 启动<span style="font-family: 宋体;">集群</span></span></h2>
+<p>1<span style="font-family: 宋体;">）</span><span style="font-family: 宋体;">在各个</span>JournalNode<span style="font-family: 宋体;">节点上，输入以下命令启动</span><span style="font-family: 'Times New Roman';">journalnode</span><span style="font-family: 宋体;">服务：（前提zookeeper集群已启动）</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ hadoop-<span style="color: #000000;">daemon.sh start journalnode
+[admin@node22 </span>~]$ hadoop-<span style="color: #000000;">daemon.sh start journalnode
+[admin@node23 </span>~]$ hadoop-daemon.sh start journalnode</pre>
+</div>
+<p>启动Journalnde是为了创建/data/ha/jn,此时jn里面是空的</p>
+<p><img src="images/1385722-20180529110909320-166550143.png" alt="">　</p>
+<p>2<span style="font-family: 宋体;">）在</span>[nn1]<span style="font-family: 宋体;">上</span><span style="font-family: 宋体;">，对namenode进行格式化，并启动：</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ hdfs namenode -format</pre>
+</div>
+<p><img src="images/1385722-20180527214027302-390395910.png" alt=""></p>
+<p>格式化namenode，此时jn里面会产生集群ID等信息</p>
+<p><img src="images/1385722-20180529111430746-1460115653.png" alt=""></p>
+<p>另外，/data/ha/tmp也会产生如下信息</p>
+<p><img src="images/1385722-20180529113236865-860616202.png" alt=""></p>
+<p>启动nn1上namenode</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 current]$ hadoop-<span style="color: #000000;">daemon.sh  start namenode
+starting namenode, logging to </span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/logs/hadoop-admin-namenode-node21.<span style="color: #0000ff;">out</span></pre>
+</div>
+<p>3<span style="font-family: 宋体;">）在</span>[nn2]<span style="font-family: 宋体;">上</span><span style="font-family: 宋体;">，同步</span>nn1的<span style="font-family: 宋体;">元数据信息：</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node22 ~]$ hdfs namenode -bootstrapStandby</pre>
+</div>
+<p><img src="images/1385722-20180529114030908-383233513.png" alt=""></p>
+<p>4<span style="font-family: 宋体;">）启动</span>[nn2]<span style="font-family: 宋体;">：</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node22 ~]$ hadoop-daemon.sh start namenode</pre>
+</div>
+<p>5）在[nn1]上，启动所有datanode</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ hadoop-daemons.sh start datanode</pre>
+</div>
+<p>6<span style="font-family: 宋体;">）</span>查看web<span style="font-family: 宋体;">页面此时显示</span>&nbsp;</p>
+<p><img src="images/1385722-20180527214232224-776504088.png" alt=""></p>
+<p>&nbsp;<img src="images/1385722-20180527214326500-1942203173.png" alt=""></p>
+<p><span style="font-family: 宋体;">7）手动切换状态，在</span><span style="font-family: 宋体;">各个</span>NameNode节点<span style="font-family: 宋体;">上启动</span>DFSZK Failover Controller，<span style="font-family: 宋体;">先在</span>哪台<span style="font-family: 宋体;">机器启动，哪个机器的</span>NameNode就是Active NameNode</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ hadoop-<span style="color: #000000;">daemin.sh start zkfc
+[admin@node22 </span>~]$ hadoop-daemin.sh start zkfc</pre>
+</div>
+<p>或者强制手动其中一个节点变为Active</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 data]$ hdfs haadmin -transitionToActive nn1 --forcemanual </pre>
+</div>
+<p>Web页面查看</p>
+<p>&nbsp;<img src="images/1385722-20180529115958871-1608200192.png" alt=""><img src="images/1385722-20180529120010974-801820660.png" alt=""></p>
+<p>8）自动切换状态，需要初始化HA在Zookeeper中状态，先停掉hdfs服务，然后随便找一台zookeeper的安装节点</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 current]$  hdfs zkfc -formatZK</pre>
+</div>
+<p><img src="images/1385722-20180529114730326-1682795.png" alt=""></p>
+<p>查看，此时会产生一个hadoop-ha的目录</p>
+<div class="cnblogs_code">
+<pre>[root@node22 ~]# zkCli.sh 　</pre>
+</div>
+<p><img src="images/1385722-20180529131851716-1292542553.png" alt=""></p>
+<p>启动hdfs服务，查看namenode状态</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ start-hdfs.sh</pre>
+</div>
+<p>9）<span style="font-family: 宋体;">验证</span></p>
+<p><span style="font-family: 宋体;">（</span>1<span style="font-family: 宋体;">）将</span>Active NameNode进程kill</p>
+<p>kill -9 namenode<span style="font-family: 宋体;">的进程</span>id</p>
+<p><span style="font-family: 宋体;">（</span>2<span style="font-family: 宋体;">）将</span>Active NameNode机器<span style="font-family: 宋体;">断开网络</span></p>
+<p>service network stop</p>
+<p><span style="color: #ff0000;">如果测试不成功，则可能是配置错误。检查<tt>zkfc</tt>守护进程以及NameNode守护进程的日志，以便进一步诊断问题。</span></p>
+<p>10）<span style="font-family: 宋体;">启动</span>yarn</p>
+<p><span style="font-family: 宋体;">（</span>1<span style="font-family: 宋体;">）在</span>node22<span style="font-family: 宋体;">中执行：</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node22 ~]$ start-yarn.sh</pre>
+</div>
+<p><span style="font-family: 宋体;">（</span>2<span style="font-family: 宋体;">）在</span>node23<span style="font-family: 宋体;">中执行：</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node23 ~]$ yarn-daemon.sh start resourcemanager　</pre>
+</div>
+<p><span style="font-family: 宋体;">（</span>3<span style="font-family: 宋体;">）查看服务状态</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node22 ~]$ yarn rmadmin -<span style="color: #000000;">getServiceState rm1
+active
+[admin@node22 </span>~]$ yarn rmadmin -<span style="color: #000000;">getServiceState rm2
+standby</span></pre>
+</div>
+<p><img src="images/1385722-20180529122623871-721023413.png" alt=""></p>
+<p>4） 验证高可用（略）</p>
+<h2 id="blogTitle34"><span style="font-size: 16px;">6 测试集群</span></h2>
+<p><span style="font-size: 14px;">1）查看进程</span></p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ start-<span style="color: #000000;">dfs.sh 
+[admin@node22 </span>~]$ start-<span style="color: #000000;">yarn.sh 
+[admin@node23 </span>~]$ yarn-daemon.sh start resourcemanager</pre>
+</div>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 ~<span style="color: #000000;">]$ jps
+</span><span style="color: #800080;">11298</span><span style="color: #000000;"> NodeManager
+</span><span style="color: #800080;">10868</span><span style="color: #000000;"> DataNode
+</span><span style="color: #800080;">11065</span><span style="color: #000000;"> JournalNode
+</span><span style="color: #800080;">11210</span><span style="color: #000000;"> DFSZKFailoverController
+</span><span style="color: #800080;">1276</span><span style="color: #000000;"> QuorumPeerMain
+</span><span style="color: #800080;">11470</span><span style="color: #000000;"> NameNode
+</span><span style="color: #800080;">11436</span><span style="color: #000000;"> Jps
+
+[admin@node22 </span>~<span style="color: #000000;">]$ jps
+</span><span style="color: #800080;">7168</span><span style="color: #000000;"> DataNode
+</span><span style="color: #800080;">7476</span><span style="color: #000000;"> ResourceManager
+</span><span style="color: #800080;">7941</span><span style="color: #000000;"> Jps
+</span><span style="color: #800080;">7271</span><span style="color: #000000;"> JournalNode
+</span><span style="color: #800080;">1080</span><span style="color: #000000;"> QuorumPeerMain
+</span><span style="color: #800080;">7352</span><span style="color: #000000;"> DFSZKFailoverController
+</span><span style="color: #800080;">7594</span><span style="color: #000000;"> NodeManager
+</span><span style="color: #800080;">7099</span><span style="color: #000000;"> NameNode
+
+[admin@node23 </span>~<span style="color: #000000;">]$ jps
+</span><span style="color: #800080;">3554</span><span style="color: #000000;"> ResourceManager
+</span><span style="color: #800080;">3204</span><span style="color: #000000;"> DataNode
+</span><span style="color: #800080;">3301</span><span style="color: #000000;"> JournalNode
+</span><span style="color: #800080;">3606</span><span style="color: #000000;"> Jps
+</span><span style="color: #800080;">3384</span><span style="color: #000000;"> NodeManager
+</span><span style="color: #800080;">1097</span> QuorumPeerMain</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p>2）任务提交</p>
+<p>&nbsp;2.1 上传文件到集群</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ hadoop fs -mkdir -p /user/admin/<span style="color: #000000;">input
+[admin@node21 </span>~]$ mkdir -p  /opt/wcinput/<span style="color: #000000;">
+[admin@node21 </span>~]$ vi  /opt/wcinput/<span style="color: #000000;">wc.txt 
+[admin@node21 </span>~]$ hadoop fs -put  /opt/wcinput/wc.txt /user/admin/input</pre>
+</div>
+<p>wc.txt 文本内容为</p>
+<div class="cnblogs_code" onclick="cnblogs_code_show('22a2b0a8-a73d-4bf6-8fdf-3ec82bd07ea9')"><img id="code_img_closed_22a2b0a8-a73d-4bf6-8fdf-3ec82bd07ea9" class="code_img_closed" src="https://images.cnblogs.com/OutliningIndicators/ContractedBlock.gif" alt=""><img id="code_img_opened_22a2b0a8-a73d-4bf6-8fdf-3ec82bd07ea9" class="code_img_opened" style="display: none;" onclick="cnblogs_code_hide('22a2b0a8-a73d-4bf6-8fdf-3ec82bd07ea9',event)" src="https://images.cnblogs.com/OutliningIndicators/ExpandedBlockStart.gif" alt="">
+<div id="cnblogs_code_open_22a2b0a8-a73d-4bf6-8fdf-3ec82bd07ea9" class="cnblogs_code_hide">
+<pre><span style="color: #000000;">hadoop spark   storm
+hbase hive sqoop
+hadoop flink flume
+spark hadoop  </span></pre>
+</div>
+<span class="cnblogs_code_collapse">wc.txt</span></div>
+<p>2.2&nbsp;上传文件后查看文件存放在什么位置</p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre><span style="color: #000000;">文件存储路径
+[admin@node21 subdir0]$ pwd
+</span>/opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/data/ha/tmp/dfs/data/current/BP-<span style="color: #800080;">1244373306</span>-<span style="color: #800080;">192.168</span>.<span style="color: #800080;">100.21</span>-<span style="color: #800080;">1527653416622</span>/current/finalized/subdir0/<span style="color: #000000;">subdir0
+查看文件内容
+[admin@node21 subdir0]$ cat blk_1073741825
+hadoop spark   storm
+hbase hive sqoop
+hadoop flink flume
+spark hadoop   </span></pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p>2.3 下载文件</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 opt]$ hadoop fs -<span style="color: #0000ff;">get</span> /user/admin/input/wc.txt</pre>
+</div>
+<p>2.4&nbsp;执行wordcount程序</p>
+<div class="cnblogs_code">
+<pre>[admin@node21 ~]$ hadoop jar /opt/module/hadoop-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>/share/hadoop/mapreduce/hadoop-mapreduce-examples-<span style="color: #800080;">2.7</span>.<span style="color: #800080;">6</span>.jar wordcount /user/admin/input /user/admin/output</pre>
+</div>
+<p>执行过程</p>
+<div class="cnblogs_code" onclick="cnblogs_code_show('fad8bfdb-75e7-415e-b677-87a291d03d03')"><img id="code_img_closed_fad8bfdb-75e7-415e-b677-87a291d03d03" class="code_img_closed" src="https://images.cnblogs.com/OutliningIndicators/ContractedBlock.gif" alt=""><img id="code_img_opened_fad8bfdb-75e7-415e-b677-87a291d03d03" class="code_img_opened" style="display: none;" onclick="cnblogs_code_hide('fad8bfdb-75e7-415e-b677-87a291d03d03',event)" src="https://images.cnblogs.com/OutliningIndicators/ExpandedBlockStart.gif" alt="">
+<div id="cnblogs_code_open_fad8bfdb-75e7-415e-b677-87a291d03d03" class="cnblogs_code_hide">
+<pre><span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">51</span>:<span style="color: #800080;">39</span> INFO input.FileInputFormat: Total input paths to process : <span style="color: #800080;">1</span>
+<span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">51</span>:<span style="color: #800080;">40</span> INFO mapreduce.JobSubmitter: number of splits:<span style="color: #800080;">1</span>
+<span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">51</span>:<span style="color: #800080;">40</span> INFO mapreduce.JobSubmitter: Submitting tokens <span style="color: #0000ff;">for</span><span style="color: #000000;"> job: job_1527660052824_0001
+</span><span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">51</span>:<span style="color: #800080;">42</span><span style="color: #000000;"> INFO impl.YarnClientImpl: Submitted application application_1527660052824_0001
+</span><span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">51</span>:<span style="color: #800080;">43</span> INFO mapreduce.Job: The url to track the job: http:<span style="color: #008000;">//</span><span style="color: #008000;">node22:8088/proxy/application_1527660052824_0001/</span>
+<span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">51</span>:<span style="color: #800080;">43</span><span style="color: #000000;"> INFO mapreduce.Job: Running job: job_1527660052824_0001
+</span><span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">52</span>:<span style="color: #800080;">33</span> INFO mapreduce.Job: Job job_1527660052824_0001 running <span style="color: #0000ff;">in</span> uber mode : <span style="color: #0000ff;">false</span>
+<span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">52</span>:<span style="color: #800080;">33</span> INFO mapreduce.Job:  map <span style="color: #800080;">0</span>% reduce <span style="color: #800080;">0</span>%
+<span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">53</span>:<span style="color: #800080;">04</span> INFO mapreduce.Job:  map <span style="color: #800080;">100</span>% reduce <span style="color: #800080;">0</span>%
+<span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">53</span>:<span style="color: #800080;">17</span> INFO mapreduce.Job:  map <span style="color: #800080;">100</span>% reduce <span style="color: #800080;">100</span>%
+<span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">53</span>:<span style="color: #800080;">19</span><span style="color: #000000;"> INFO mapreduce.Job: Job job_1527660052824_0001 completed successfully
+</span><span style="color: #800080;">18</span>/<span style="color: #800080;">05</span>/<span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">53</span>:<span style="color: #800080;">19</span> INFO mapreduce.Job: Counters: <span style="color: #800080;">49</span><span style="color: #000000;">
+    File System Counters
+        FILE: Number of bytes read</span>=<span style="color: #800080;">102</span><span style="color: #000000;">
+        FILE: Number of bytes written</span>=<span style="color: #800080;">250513</span><span style="color: #000000;">
+        FILE: Number of read operations</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        FILE: Number of large read operations</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        FILE: Number of </span><span style="color: #0000ff;">write</span> operations=<span style="color: #800080;">0</span><span style="color: #000000;">
+        HDFS: Number of bytes read</span>=<span style="color: #800080;">188</span><span style="color: #000000;">
+        HDFS: Number of bytes written</span>=<span style="color: #800080;">64</span><span style="color: #000000;">
+        HDFS: Number of read operations</span>=<span style="color: #800080;">6</span><span style="color: #000000;">
+        HDFS: Number of large read operations</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        HDFS: Number of </span><span style="color: #0000ff;">write</span> operations=<span style="color: #800080;">2</span><span style="color: #000000;">
+    Job Counters 
+        Launched map tasks</span>=<span style="color: #800080;">1</span><span style="color: #000000;">
+        Launched reduce tasks</span>=<span style="color: #800080;">1</span><span style="color: #000000;">
+        Data</span>-local map tasks=<span style="color: #800080;">1</span><span style="color: #000000;">
+        Total </span><span style="color: #0000ff;">time</span> spent by all maps <span style="color: #0000ff;">in</span> occupied slots (ms)=<span style="color: #800080;">25438</span><span style="color: #000000;">
+        Total </span><span style="color: #0000ff;">time</span> spent by all reduces <span style="color: #0000ff;">in</span> occupied slots (ms)=<span style="color: #800080;">10815</span><span style="color: #000000;">
+        Total </span><span style="color: #0000ff;">time</span> spent by all map tasks (ms)=<span style="color: #800080;">25438</span><span style="color: #000000;">
+        Total </span><span style="color: #0000ff;">time</span> spent by all reduce tasks (ms)=<span style="color: #800080;">10815</span><span style="color: #000000;">
+        Total vcore</span>-milliseconds taken by all map tasks=<span style="color: #800080;">25438</span><span style="color: #000000;">
+        Total vcore</span>-milliseconds taken by all reduce tasks=<span style="color: #800080;">10815</span><span style="color: #000000;">
+        Total megabyte</span>-milliseconds taken by all map tasks=<span style="color: #800080;">26048512</span><span style="color: #000000;">
+        Total megabyte</span>-milliseconds taken by all reduce tasks=<span style="color: #800080;">11074560</span><span style="color: #000000;">
+    Map</span>-<span style="color: #000000;">Reduce Framework
+        Map input records</span>=<span style="color: #800080;">4</span><span style="color: #000000;">
+        Map output records</span>=<span style="color: #800080;">11</span><span style="color: #000000;">
+        Map output bytes</span>=<span style="color: #800080;">112</span><span style="color: #000000;">
+        Map output materialized bytes</span>=<span style="color: #800080;">102</span><span style="color: #000000;">
+        Input </span><span style="color: #0000ff;">split</span> bytes=<span style="color: #800080;">105</span><span style="color: #000000;">
+        Combine input records</span>=<span style="color: #800080;">11</span><span style="color: #000000;">
+        Combine output records</span>=<span style="color: #800080;">8</span><span style="color: #000000;">
+        Reduce input </span><span style="color: #0000ff;">groups</span>=<span style="color: #800080;">8</span><span style="color: #000000;">
+        Reduce shuffle bytes</span>=<span style="color: #800080;">102</span><span style="color: #000000;">
+        Reduce input records</span>=<span style="color: #800080;">8</span><span style="color: #000000;">
+        Reduce output records</span>=<span style="color: #800080;">8</span><span style="color: #000000;">
+        Spilled Records</span>=<span style="color: #800080;">16</span><span style="color: #000000;">
+        Shuffled Maps </span>=<span style="color: #800080;">1</span><span style="color: #000000;">
+        Failed Shuffles</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        Merged Map outputs</span>=<span style="color: #800080;">1</span><span style="color: #000000;">
+        GC </span><span style="color: #0000ff;">time</span> elapsed (ms)=<span style="color: #800080;">558</span><span style="color: #000000;">
+        CPU </span><span style="color: #0000ff;">time</span> spent (ms)=<span style="color: #800080;">8320</span><span style="color: #000000;">
+        Physical memory (bytes) snapshot</span>=<span style="color: #800080;">308072448</span><span style="color: #000000;">
+        Virtual memory (bytes) snapshot</span>=<span style="color: #800080;">4159348736</span><span style="color: #000000;">
+        Total committed heap usage (bytes)</span>=<span style="color: #800080;">165810176</span><span style="color: #000000;">
+    Shuffle Errors
+        BAD_ID</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        CONNECTION</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        IO_ERROR</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        WRONG_LENGTH</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        WRONG_MAP</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+        WRONG_REDUCE</span>=<span style="color: #800080;">0</span><span style="color: #000000;">
+    File Input Format Counters 
+        Bytes Read</span>=<span style="color: #800080;">83</span><span style="color: #000000;">
+    File Output Format Counters 
+        Bytes Written</span>=<span style="color: #800080;">64</span></pre>
+</div>
+<span class="cnblogs_code_collapse">View Code</span></div>
+<p>下载查看</p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>[admin@node21 wcoutput]$ hadoop fs -<span style="color: #0000ff;">get</span> /user/admin/output/part-r-<span style="color: #800080;">00000</span><span style="color: #000000;">
+[admin@node21 wcoutput]$ ll
+total </span><span style="color: #800080;">4</span>
+-rw-r--r-- <span style="color: #800080;">1</span> admin admin <span style="color: #800080;">64</span> May <span style="color: #800080;">30</span> <span style="color: #800080;">02</span>:<span style="color: #800080;">58</span> part-r-<span style="color: #800080;">00000</span><span style="color: #000000;">
+[admin@node21 wcoutput]$ cat part</span>-r-<span style="color: #800080;">00000</span><span style="color: #000000;"> 
+flink    </span><span style="color: #800080;">1</span><span style="color: #000000;">
+flume    </span><span style="color: #800080;">1</span><span style="color: #000000;">
+hadoop    </span><span style="color: #800080;">3</span><span style="color: #000000;">
+hbase    </span><span style="color: #800080;">1</span><span style="color: #000000;">
+hive    </span><span style="color: #800080;">1</span><span style="color: #000000;">
+spark    </span><span style="color: #800080;">2</span><span style="color: #000000;">
+sqoop    </span><span style="color: #800080;">1</span><span style="color: #000000;">
+storm    </span><span style="color: #800080;">1</span></pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h2 id="blogTitle35">三 配置集群常见错误</h2>
+<h3 id="blogTitle36">1 自动故障转移错误</h3>
+<p>1.1 两台namenode之间不能通信，kill掉一台Active的namenode节点，另外一台standby不能切换Active</p>
+<p>查看namenode日志 或者zkfc日志，<span style="color: #ff0000;">nn1 连接 nn2 8020失败</span></p>
+<p><img src="images/1385722-20180529162353876-1925620243.png" alt=""></p>
+<p>&nbsp;原因分析：若服务器是最小化安装CentOS时，有可能系统没有fuster程序，那么跳过这个安装步骤直接进行后面的操作时，将有可能出现以下问题：</p>
+<p>node21作为主节点时，kill掉node21上的NameNode和ResourceManager进程时，可以实现故障转移，node22将从stanby状态自动变成active状态；但是当node22作为主节点时，若kill掉node22上的进程，node21上的进程状态却还是stanby，并不能实现故障自动转移。原因是我们在 hdfs-site.xml中配置了当集群需要故障自动转移时采用SSH方式进行，而因为缺少fuster程序，将在zkfc的日志文件中发现如下错误</p>
+<div class="cnblogs_code">
+<pre>PATH=$PATH:/sbin:/usr/sbin <span style="color: #0000ff;">fuser</span> -v -k -n tcp <span style="color: #800080;">9000</span> via <span style="color: #0000ff;">ssh</span>: bash: <span style="color: #0000ff;">fuser</span><span style="color: #000000;">: 未找到命令
+Unable to fence service by any configured method
+java.lang.RuntimeException: Unable to fence NameNode at node22</span>/<span style="color: #800080;">192.168</span>.<span style="color: #800080;">100.22</span>:<span style="color: #800080;">8020</span></pre>
+</div>
+<p>提示未找到fuster程序，导致无法进行fence，所以可以通过如下命令来安装，Psmisc软件包中包含了fuster程序：</p>
+<div class="cnblogs_code">
+<pre><span style="color: #008000;">//</span><span style="color: #008000;">分别在node21、node22、node23上执行</span>
+<span style="color: #0000ff;">sudo</span> <span style="color: #0000ff;">yum</span> <span style="color: #0000ff;">install</span> psmisc</pre>
+</div>
+<p>重启Hadoop服务验证成功。</p>
+<h3 id="blogTitle37">2HDFS启动警告信息</h3>
+<p>Hadoop2.7.6在安装成功后，start-dfs.sh启动后出现警告提示：</p>
+<p><span style="color: #ff0000;">WARN util.NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable</span></p>
+<p>在Hadoop2.7以后的版本中，<code>$HADOOP_HOME/lib/native 包下的文件都改为了64位，不存在版本差异化的问题，这里解决方案是在文件<span style="color: #ff0000;">hadoop-env.sh</span>中增加如下一行信息</code></p>
+<div class="cnblogs_code">
+<pre>export&nbsp;<span class="attribute">HADOOP_OPTS=<span class="attribute-value">"-Djava.library.path=${HADOOP_HOME}/lib/native"&nbsp;&nbsp;</span></span></pre>
+</div>
+<p>再次启动就没有警告提示了。</p>
+<h2 id="blogTitle38">四&nbsp;Hadoop集群群启脚本</h2>
+<h3 id="blogTitle39">1启动服务</h3>
+<p>zookeeper&nbsp; &nbsp;hadoop&nbsp;</p>
+<h3 id="blogTitle40">2脚本</h3>
+<p>1 编写启动集群脚本&nbsp; vi start-cluster.sh</p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>#!/bin/bash
+echo  "******************  开始启动集群所有节点服务 ****************"
+echo  "******************  正在启动zookeeper   *********************"
+for i in admin@node21 admin@node22 admin@node23
+do
+     ssh $i '/opt/module/zookeeper-3.4.12/bin/zkServer.sh start'
+done
+echo  "********************     正在启动HDFS     *******************"
+ssh   admin@node21 '/opt/module/hadoop-2.7.6/sbin/start-dfs.sh'
+echo  "*********************    正在启动YARN   ******************"
+ssh   admin@node22 '/opt/module/hadoop-2.7.6/sbin/start-yarn.sh'
+echo  "***************  正在node21上启动JobHistoryServer   *********"
+ssh   admin@node21 '/opt/module/hadoop-2.7.6/sbin/mr-jobhistory-daemon.sh start historyserver'
+echo  "******************      集群启动成功      *******************"*</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p>2 编写关闭集群脚本 vi stop-cluster.sh</p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>#!/bin/bash
+echo  "*************      开在关闭集群所有节点服务      *************"
+echo  "*************  正在node21上关闭JobHistoryServer  *************"
+ssh   admin@node21 '/opt/module/hadoop-2.7.6/sbin/mr-jobhistory-daemon.sh stop historyserver'
+echo  "*************         正在关闭YARN               *************"
+ssh   admin@node22 '/opt/module/hadoop-2.7.6/sbin/stop-yarn.sh'
+echo  "*************         正在关闭HDFS               *************"
+ssh   admin@node21 '/opt/module/hadoop-2.7.6/sbin/stop-dfs.sh'
+echo  "*************         正在关闭zookeeper          *************"
+for i in admin@node21 admin@node22 admin@node23
+do
+     ssh $i '/opt/module/zookeeper-3.4.12/bin/zkServer.sh stop'
+done</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<p>3 编写查看集群jps进程脚本utils.sh</p>
+<div class="cnblogs_code"><div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div>
+<pre>#!/bin/bash 
+echo  "************* 开始启动JPS  **********"
+echo  "************* node21的jps **********"
+ssh   admin@node21  'jps'
+echo  "************* node22的jps **********"
+ssh   admin@node22  'jps'
+echo  "************* node23的jps **********"
+ssh   admin@node23  'jps'</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a href="javascript:void(0);" onclick="copyCnblogsCode(this)" title="复制代码"><img src="//common.cnblogs.com/images/copycode.gif" alt="复制代码"></a></span></div></div>
+<h3 id="blogTitle41">3赋权限给脚本</h3>
+<p>chmod +x 脚本名称</p>
+<h3 id="blogTitle42">4其他问题</h3>
+<p>Linux执行.sh文件，提示No such file or directory的问题的解决方法：</p>
+<p><img src="https://images2018.cnblogs.com/blog/1385722/201806/1385722-20180604150200676-57987595.png" alt=""></p>
+<p>原因：在windows中写好shell脚本测试正常，但是上传到 Linux 上以脚本方式运行命令时提示No such file or directory错误，那么一般是文件格式是dos格式的缘故，改成unix 格式即可。一般有如下几种修改办法。</p>
+<p>&nbsp;1）在Windows下转换：&nbsp;<br>利用一些编辑器如UltraEdit或EditPlus等工具先将脚本编码转换，再放到Linux中执行。转换方式如下（UltraEdit）：File--&gt;Conversions--&gt;DOS-&gt;UNIX即可。&nbsp;<br>2)方法&nbsp;<br>用vi打开该sh文件，输入：<br><strong>:set ff&nbsp;</strong><br>回车，显示fileformat=dos，重新设置下文件格式：<br><strong>:set ff=unix&nbsp;</strong><br>保存退出:&nbsp;<br><strong>:wq&nbsp;</strong><br>再执行，就可以了</p></div><div id="MySignature"></div>
+<div class="clear"></div>
+<div id="blog_post_info_block">
+<div id="BlogPostCategory">分类: <a href="https://www.cnblogs.com/frankdeng/category/1206140.html" target="_blank">Hadoop</a></div>
+<div id="EntryTag">标签: <a href="https://www.cnblogs.com/frankdeng/tag/Hadoop/">Hadoop</a></div>
+<div id="blog_post_info"><div id="green_channel">
+        <a href="javascript:void(0);" id="green_channel_digg" onclick="DiggIt(9047698,cb_blogId,1);green_channel_success(this,'谢谢推荐！');">好文要顶</a>
+            <a id="green_channel_follow" onclick="follow('238792d9-f4d4-4d4d-d3b3-08d5a91b4f51');" href="javascript:void(0);">关注我</a>
+    <a id="green_channel_favorite" onclick="AddToWz(cb_entryId);return false;" href="javascript:void(0);">收藏该文</a>
+    <a id="green_channel_weibo" href="javascript:void(0);" title="分享至新浪微博" onclick="ShareToTsina()"><img src="//common.cnblogs.com/images/icon_weibo_24.png" alt=""></a>
+    <a id="green_channel_wechat" href="javascript:void(0);" title="分享至微信" onclick="shareOnWechat()"><img src="//common.cnblogs.com/images/wechat.png" alt=""></a>
+</div>
+<div id="author_profile">
+    <div id="author_profile_info" class="author_profile_info">
+            <a href="http://home.cnblogs.com/u/frankdeng/" target="_blank"><img src="//pic.cnblogs.com/face/1385722/20180509232100.png" class="author_avatar" alt=""></a>
+        <div id="author_profile_detail" class="author_profile_info">
+            <a href="http://home.cnblogs.com/u/frankdeng/">Frankdeng</a><br>
+            <a href="http://home.cnblogs.com/u/frankdeng/followees">关注 - 42</a><br>
+            <a href="http://home.cnblogs.com/u/frankdeng/followers">粉丝 - 50</a>
+        </div>
+    </div>
+    <div class="clear"></div>
+    <div id="author_profile_honor"></div>
+    <div id="author_profile_follow">
+                <a href="javascript:void(0);" onclick="follow('238792d9-f4d4-4d4d-d3b3-08d5a91b4f51');return false;">+加关注</a>
+    </div>
+</div>
+<div id="div_digg">
+    <div class="diggit" onclick="votePost(9047698,'Digg')">
+        <span class="diggnum" id="digg_count">0</span>
+    </div>
+    <div class="buryit" onclick="votePost(9047698,'Bury')">
+        <span class="burynum" id="bury_count">0</span>
+    </div>
+    <div class="clear"></div>
+    <div class="diggword" id="digg_tips">
+    </div>
+</div>
+<script type="text/javascript">
+    currentDiggType = 0;
+</script></div>
+<div class="clear"></div>
+<div id="post_next_prev"><a href="https://www.cnblogs.com/frankdeng/p/9067160.html" class="p_n_p_prefix">« </a> 上一篇：<a href="https://www.cnblogs.com/frankdeng/p/9067160.html" title="发布于2018-05-15 23:25">Zookeeper（二）Zookeeper原理与API应用</a><br><a href="https://www.cnblogs.com/frankdeng/p/9133394.html" class="p_n_p_prefix">» </a> 下一篇：<a href="https://www.cnblogs.com/frankdeng/p/9133394.html" title="发布于2018-05-18 15:24">Hadoop（三）HDFS读写原理与shell命令</a><br></div>
+</div>
+
+
+		</div>
+		<div class="postDesc">posted @ <span id="post-date">2018-05-16 19:26</span> <a href="https://www.cnblogs.com/frankdeng/">Frankdeng</a> 阅读(<span id="post_view_count">6223</span>) 评论(<span id="post_comment_count">2</span>)  <a href="https://i.cnblogs.com/EditPosts.aspx?postid=9047698" rel="nofollow">编辑</a> <a href="#" onclick="AddToWz(9047698);return false;">收藏</a></div>
+	</div>
+	<script type="text/javascript">var allowComments=true,cb_blogId=428549,cb_entryId=9047698,cb_blogApp=currentBlogApp,cb_blogUserGuid='238792d9-f4d4-4d4d-d3b3-08d5a91b4f51',cb_entryCreatedDate='2018/5/16 19:26:00';loadViewCount(cb_entryId);var cb_postType=1;</script>
+	
+</div>
+</body>
+</html>
