@@ -4,7 +4,7 @@
 
 [flume安装测试](flume安装测试.md)
 
-[hadoop hbase zookeeper hive版本选型](hadoop hbase zookeeper hive版本选型.md)
+[hadoop_hbase_zookeeper_hive版本选型](hadoop_hbase_zookeeper_hive版本选型.md)
 
 [hadoop集群安装](hadoop集群安装.md)
 
