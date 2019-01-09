@@ -1,280 +1,1096 @@
-hadoop高可用配置
+# hadoop高可用配置
 
-## zookeeper安装
+## 安装zookeeper集群
 
-h102 h103 h104三台上安装zookeeper
-
-
-
-下载上传zookeeper-3.4.12.tar.gz到h102
+[zookeeper集群安装](zookeeper集群安装.md)
 
 
 
-解压
+## 修改hadoop配置
 
-```
-[hadoop@h102 ~]$ tar -zxvf zookeeper-3.4.12.tar.gz 
-```
+### 修改core-site.xml
 
+1. 将原来的fs.defaultFS
 
+   从hdfs://h101:9000改为  hdfs://hacluster
 
-### 配置zookeeper
+2. 新增zookeeper配置
 
-```
-mkdir -p /home/hadoop/zkrun
+   ```
+   <!-- 指定ZKFC故障自动切换转移 -->
+        <property>
+          <name>ha.zookeeper.quorum</name>
+          <value>h102:2181,h103:2181,h104:2181</value>
+        </property>
+   ```
 
-cd /home/hadoop/zookeeper-3.4.12/conf
-[hadoop@h102 conf]$ ls
-configuration.xsl  log4j.properties  zoo_sample.cfg
-[hadoop@h102 conf]$ cp zoo_sample.cfg zoo.cfg
-```
-
-
-
-zoo.cfg新增（或修改）以下配置
+   修改后：
 
 ```
-dataDir=/home/hadoop/zkrun/zookeeper
-dataLogDir=/home/hadoop/zkrun/logs
+<configuration>
+<!-- 指定HDFS中NameNode的地址 -->
+     <property>
+       <name>fs.defaultFS</name>
+       <value>hdfs://h101:9000</value>
+     </property>
+<!-- 指定hadoop运行时产生文件的存储目录 -->
+     <property>
+       <name>hadoop.tmp.dir</name>
+       <value>/home/hadoop/run</value>
+     </property>
+<!-- 指定ZKFC故障自动切换转移 -->
+     <property>
+       <name>ha.zookeeper.quorum</name>
+       <value>h102:2181,h103:2181,h104:2181</value>
+     </property>
+</configuration>
+```
 
-server.1=h102:2888:3888
-server.2=h103:2888:3888
-server.3=h104:2888:3888
+### 修改hdfs-site.xml
+
+```
+<configuration>
+<!-- 设置dfs副本数，不设置默认是3个   -->
+    <property>
+        <name>dfs.replication</name>
+        <value>2</value>
+    </property>
+
+<!-- 完全分布式集群名称 -->
+<property>
+  <name>dfs.nameservices</name>
+  <value>hacluster</value>
+</property>
+
+<!-- 集群中NameNode节点都有哪些 -->
+<property>
+   <name>dfs.ha.namenodes.hacluster</name>
+   <value>nn1,nn2</value>
+</property>
+<!-- nn1的RPC通信地址 -->
+<property>
+   <name>dfs.namenode.rpc-address.hacluster.nn1</name>
+   <value>h101:8020</value>
+</property>
+<!-- nn2的RPC通信地址 -->
+<property>
+   <name>dfs.namenode.rpc-address.hacluster.nn2</name>
+   <value>h102:8020</value>
+</property>
+<!-- nn1的http通信地址 -->
+<property>
+   <name>dfs.namenode.http-address.hacluster.nn1</name>
+   <value>h101:50070</value>
+</property>
+<!-- nn2的http通信地址 -->
+<property>
+    <name>dfs.namenode.http-address.hacluster.nn2</name>
+    <value>h102:50070</value>
+</property>
+<!-- 指定NameNode元数据在JournalNode上的存放位置 -->
+<property>
+    <name>dfs.namenode.shared.edits.dir</name>
+    <value>qjournal://h101:8485;h102:8485;h103:8485/hacluster</value>
+</property>
+<!-- 配置隔离机制，即同一时刻只能有一台服务器对外响应 -->
+<property>
+    <name>dfs.ha.fencing.methods</name>
+    <value>sshfence</value>
+</property>
+<!-- 使用隔离机制时需要ssh无秘钥登录-->
+<property>
+    <name>dfs.ha.fencing.ssh.private-key-files</name>
+    <value>/home/hadoop/.ssh/id_rsa</value>
+</property>
+<!-- 声明journalnode服务器存储目录-->
+<property>
+   <name>dfs.journalnode.edits.dir</name>
+   <value>/home/hadoop/run/ha/jn</value>
+</property>
+<!-- 关闭权限检查-->
+<property>
+   <name>dfs.permissions.enable</name>
+   <value>false</value>
+</property>
+<!-- 访问代理类：client，hacluster，active配置失败自动切换实现方式-->
+<property>
+   <name>dfs.client.failover.proxy.provider.hacluster</name>
+   <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value>
+</property>
+<!-- 配置自动故障转移-->
+<property>
+   <name>dfs.ha.automatic-failover.enabled</name>
+   <value>true</value>
+</property>　
+</configuration>
 ```
 
 
 
-```
-[hadoop@h102 conf]$ mkdir  /home/hadoop/zkrun/zookeeper/
-[hadoop@h102 conf]$ echo 1 > /home/hadoop/zkrun/zookeeper/myid
-```
-
-
-
-#### 配置zookeeper环境变量
-
-vi .bash_profile
+mapred-site.xml
 
 ```
-export ZK_HOME=$HOME/zookeeper-3.4.12
-export PATH=$ZK_HOME/bin:$PATH
+<configuration>
+    <!-- 指定mr运行在yarn上 -->
+    <property>
+     <name>mapreduce.framework.name</name>
+     <value>yarn</value>
+    </property>
+
+<!-- 指定mr历史服务器主机,端口 -->
+  <property>   
+    <name>mapreduce.jobhistory.address</name>   
+    <value>h101:10020</value>   
+  </property>   
+<!-- 指定mr历史服务器WebUI主机,端口 -->
+  <property>   
+    <name>mapreduce.jobhistory.webapp.address</name>   
+    <value>h101:19888</value>   
+  </property>
+<!-- 历史服务器的WEB UI上最多显示20000个历史的作业记录信息 -->    
+  <property>
+    <name>mapreduce.jobhistory.joblist.cache.size</name>
+    <value>20000</value>
+  </property>
+<!--配置作业运行日志 --> 
+  <property>
+    <name>mapreduce.jobhistory.done-dir</name>
+    <value>${yarn.app.mapreduce.am.staging-dir}/history/done</value>
+  </property>
+  <property>
+    <name>mapreduce.jobhistory.intermediate-done-dir</name>
+    <value>${yarn.app.mapreduce.am.staging-dir}/history/done_intermediate</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.am.staging-dir</name>
+    <value>/tmp/hadoop-yarn/staging</value>
+  </property>
+
+</configuration>
 ```
 
-source .bash_profile
-
-验证环境变量生效
+### 修改yarn-site.xml
 
 ```
-[hadoop@h102 bin]$ which zkServer.sh
-~/zookeeper-3.4.12/bin/zkServer.sh
+<configuration>
+
+<!-- Site specific YARN configuration properties -->
+
+<!-- reducer获取数据的方式 -->
+     <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+     </property>
+
+   <!--启用resourcemanager ha-->
+    <property>
+        <name>yarn.resourcemanager.ha.enabled</name>
+        <value>true</value>
+    </property>
+    <!--声明两台resourcemanager的地址-->
+    <property>
+        <name>yarn.resourcemanager.cluster-id</name>
+        <value>rmCluster</value>
+    </property>
+    <property>
+        <name>yarn.resourcemanager.ha.rm-ids</name>
+        <value>rm1,rm2</value>
+    </property>
+    <property>
+        <name>yarn.resourcemanager.hostname.rm1</name>
+        <value>h102</value>
+    </property>
+    <property>
+        <name>yarn.resourcemanager.hostname.rm2</name>
+        <value>h103</value>
+    </property>
+    <!--指定zookeeper集群的地址-->
+    <property>
+        <name>yarn.resourcemanager.zk-address</name>
+        <value>h102:2181,h103:2181,h104:2181</value>
+    </property>
+    <!--启用自动恢复-->
+    <property>
+        <name>yarn.resourcemanager.recovery.enabled</name>
+        <value>true</value>
+    </property>
+    <!--指定resourcemanager的状态信息存储在zookeeper集群-->
+    <property>
+        <name>yarn.resourcemanager.store.class</name>    
+        <value>org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore</value>
+    </property>
+
+</configuration>
 ```
 
 
 
-#### zookeeper拷贝到其他机器
+### 拷贝修改后的文件到其他机器
 
 ```
-[hadoop@h102 ~]$ scp -r zookeeper-3.4.12 hadoop@h103:/home/hadoop
-[hadoop@h102 ~]$ scp -r zookeeper-3.4.12 hadoop@h104:/home/hadoop
+[hadoop@h101 ~]$ cpush hadoop-2.7.7 /home/hadoop/
+```
 
-[hadoop@h102 ~]$ scp .bash_profile hadoop@h103:/home/hadoop
-[hadoop@h102 ~]$ scp .bash_profile hadoop@h104:/home/hadoop
-
-[hadoop@h102 ~]$ scp -r zkrun hadoop@h103:/home/hadoop
-[hadoop@h102 ~]$ scp -r zkrun hadoop@h104:/home/hadoop
+### 启动集群
 
 
+
+/home/hadoop/run/目录下如果有旧的东西，先删除旧的。
+
+
+
+根据hdfs-site.xml的以下配置，在h101 h102 h103上启动Journal集群
+
+```
+<!-- 指定NameNode元数据在JournalNode上的存放位置 -->
+<property>
+    <name>dfs.namenode.shared.edits.dir</name>
+    <value>qjournal://h101:8485;h102:8485;h103:8485/hacluster</value>
+</property>
 ```
 
 
 
-#### 修改h103 h104 的myid
+
 
 ```
-[hadoop@h103 ~]$ echo 2 > /home/hadoop/zkrun/zookeeper/myid
-[hadoop@h104 ~]$ echo 3 > /home/hadoop/zkrun/zookeeper/myid 
+[hadoop@h101 ~]$ hadoop-daemon.sh start journalnode
+starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h101.out
+
+
+[hadoop@h102 ha]$ hadoop-daemon.sh start journalnode
+starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h102.out
+
+[hadoop@h103 ~]$ hadoop-daemon.sh start journalnode
+starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h103.out
 ```
 
-
-
-#### 启动zookeeper
-
-```
-[hadoop@h102 ~]$ zkServer.sh start
-ZooKeeper JMX enabled by default
-Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
-Starting zookeeper ... STARTED
-
-
-[hadoop@h103 ~]$ source .bash_profile
-[hadoop@h103 ~]$ zkServer.sh start
-ZooKeeper JMX enabled by default
-Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
-Starting zookeeper ... STARTED
-
-[hadoop@h104 ~]$ source .bash_profile
-[hadoop@h104 ~]$ zkServer.sh start
-ZooKeeper JMX enabled by default
-Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
-Starting zookeeper ... STARTED
-```
-
-#### 检查进程QuorumPeerMain
+查看启动结果：
 
 ```
 [hadoop@h101 ~]$ cexec /usr/local/java7/bin/jps
 ************************* h *************************
 --------- h101---------
-1313 NameNode
-1572 Jps
+2100 Jps
+2013 JournalNode
 --------- h102---------
-1583 Jps
-1254 SecondaryNameNode
 1550 QuorumPeerMain
-1181 DataNode
+1950 JournalNode
+2015 Jps
 --------- h103---------
 1407 QuorumPeerMain
-1185 DataNode
-1442 Jps
+1865 Jps
+1800 JournalNode
 --------- h104---------
-1424 Jps
+1751 Jps
 1394 QuorumPeerMain
-1183 DataNode
+```
+
+启动后建立了目录/home/hadoop/run/ha/jn (配置了这个目录)
+
+```
+[hadoop@h101 ha]$ pwd
+/home/hadoop/run/ha
+[hadoop@h101 ha]$ find .
+.
+./jn
 ```
 
 
 
-#### 查看集群状态
+
+
+
+
+执行hdfs namenode -format
 
 ```
-[hadoop@h102 bin]$ zkServer.sh  status
-ZooKeeper JMX enabled by default
-Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
-Mode: follower
+[hadoop@h101 ha]$ hdfs namenode -format
+```
 
-[hadoop@h103 ~]$  zkServer.sh  status
-ZooKeeper JMX enabled by default
-Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
-Mode: leader
+执行结果
+```
+[hadoop@h101 run]$ cexec "find /home/hadoop/run"
+************************* h *************************
+--------- h101---------
+/home/hadoop/run
+/home/hadoop/run/ha
+/home/hadoop/run/ha/jn
+/home/hadoop/run/ha/jn/hacluster
+/home/hadoop/run/ha/jn/hacluster/current
+/home/hadoop/run/ha/jn/hacluster/current/VERSION
+/home/hadoop/run/ha/jn/hacluster/current/paxos
+/home/hadoop/run/ha/jn/hacluster/in_use.lock
+/home/hadoop/run/dfs
+/home/hadoop/run/dfs/name
+/home/hadoop/run/dfs/name/current
+/home/hadoop/run/dfs/name/current/VERSION
+/home/hadoop/run/dfs/name/current/seen_txid
+/home/hadoop/run/dfs/name/current/fsimage_0000000000000000000.md5
+/home/hadoop/run/dfs/name/current/fsimage_0000000000000000000
+--------- h102---------
+/home/hadoop/run
+/home/hadoop/run/ha
+/home/hadoop/run/ha/jn
+/home/hadoop/run/ha/jn/hacluster
+/home/hadoop/run/ha/jn/hacluster/current
+/home/hadoop/run/ha/jn/hacluster/current/VERSION
+/home/hadoop/run/ha/jn/hacluster/current/paxos
+/home/hadoop/run/ha/jn/hacluster/in_use.lock
+--------- h103---------
+/home/hadoop/run
+/home/hadoop/run/ha
+/home/hadoop/run/ha/jn
+/home/hadoop/run/ha/jn/hacluster
+/home/hadoop/run/ha/jn/hacluster/current
+/home/hadoop/run/ha/jn/hacluster/current/VERSION
+/home/hadoop/run/ha/jn/hacluster/current/paxos
+/home/hadoop/run/ha/jn/hacluster/in_use.lock
+--------- h104---------
+/home/hadoop/run
+```
 
-[hadoop@h104 ~]$  zkServer.sh  status
-ZooKeeper JMX enabled by default
-Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
-Mode: follower
+查看集群id ：clusterID （一台机器上看就可以，每台jn上都有一样的集群id）
+
+```
+[hadoop@h101 /]$ cexec "cat /home/hadoop/run/ha/jn/hacluster/current/VERSION"
+************************* h *************************
+--------- h101---------
+#Wed Jan 09 20:25:58 CST 2019
+namespaceID=1703055857
+clusterID=CID-4d978406-f243-49d3-b941-5a2bbb849d28
+cTime=0
+storageType=JOURNAL_NODE
+layoutVersion=-63
+--------- h102---------
+#Wed Jan 09 20:25:58 CST 2019
+namespaceID=1703055857
+clusterID=CID-4d978406-f243-49d3-b941-5a2bbb849d28
+cTime=0
+storageType=JOURNAL_NODE
+layoutVersion=-63
+--------- h103---------
+#Wed Jan 09 20:25:58 CST 2019
+namespaceID=1703055857
+clusterID=CID-4d978406-f243-49d3-b941-5a2bbb849d28
+cTime=0
+storageType=JOURNAL_NODE
+layoutVersion=-63
+--------- h104---------
+cat: /home/hadoop/run/ha/jn/hacluster/current/VERSION: 没有那个文件或目录
 ```
 
 
 
-#### 操作测试
+启动nn1节点（h101）的namenode
 
 ```
-[hadoop@h103 ~]$ zkCli.sh 
-Connecting to localhost:2181
+[hadoop@h101 /]$  hadoop-daemon.sh  start namenode
+starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h101.out
+```
+
+在nn2上同步nn1的元信息
+
+```
+[hadoop@h102 ~]$ hdfs namenode -bootstrapStandby
+19/01/09 20:31:24 INFO namenode.NameNode: STARTUP_MSG:
+=====================================================
+About to bootstrap Standby ID nn2 from:
+           Nameservice ID: hacluster
+        Other Namenode ID: nn1
+  Other NN's HTTP address: http://h101:50070
+  Other NN's IPC  address: h101/192.168.56.101:8020
+             Namespace ID: 1703055857
+            Block pool ID: BP-913785061-192.168.56.101-1547036757957
+               Cluster ID: CID-4d978406-f243-49d3-b941-5a2bbb849d28
+           Layout version: -63
+       isUpgradeFinalized: true
+=====================================================
+19/01/09 20:31:27 INFO common.Storage: Storage directory /home/hadoop/run/dfs/name has been successfully formatted.
+19/01/09 20:31:28 INFO namenode.TransferFsImage: Opening connection to http://h101:50070/imagetransfer?getimage=1&txid=0&storageInfo=-63:1703055857:0:CID-4d978406-f243-49d3-b941-5a2bbb849d28
+19/01/09 20:31:28 INFO namenode.TransferFsImage: Image Transfer timeout configured to 60000 milliseconds
+19/01/09 20:31:28 INFO namenode.TransferFsImage: Transfer took 0.00s at 0.00 KB/s
+19/01/09 20:31:28 INFO namenode.TransferFsImage: Downloaded file fsimage.ckpt_0000000000000000000 size 323 bytes.
+19/01/09 20:31:28 INFO util.ExitUtil: Exiting with status 0
+```
+
+
+
+启动nn2
+
+```
+[hadoop@h102 ~]$ hadoop-daemon.sh start namenode
+starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h102.out
+```
+
+
+
+在nn1上启动所有的datanode
+
+
+
+```
+[hadoop@h101 /]$ hadoop-daemons.sh start datanode
+h102: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h102.out
+h104: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h104.out
+h103: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h103.out
+```
+
+
+
+目前所有机器上的进程：
+
+```
+[hadoop@h101 /]$ cexec /usr/local/java7/bin/jps
+************************* h *************************
+--------- h101---------
+2551 NameNode
+2705 Jps
+2379 JournalNode
+--------- h102---------
+2167 JournalNode
+1550 QuorumPeerMain
+2424 DataNode
+2513 Jps
+2317 NameNode
+--------- h103---------
+1407 QuorumPeerMain
+2220 Jps
+2141 DataNode
+2009 JournalNode
+--------- h104---------
+2027 Jps
+1948 DataNode
+1394 QuorumPeerMain
+```
+
+访问网页
+
+http://h101:50070 或者
+
+http://h102:50070/
+
+
+
+两个Namenode都是standby（备用）的状态
+
+
+
+手动切换状态，在各个NameNode节点上启动DFSZK Failover Controller，先在哪台机器启动，哪个机器的NameNode就是Active NameNode
+
+```
+[hadoop@h101 sbin]$ hadoop-daemon.sh start zkfc
+starting zkfc, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-zkfc-h101.out
+
+[hadoop@h102 ~]$ hadoop-daemon.sh start zkfc
+starting zkfc, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-zkfc-h102.out
+```
+
+执行以上两个命令之后，依然是standby, 先启动的机器并没有变为active
+
+执行以下命令后，nn1即h101 变为了active h102依然为standby
+
+```
+[hadoop@h101 sbin]$ hdfs haadmin -transitionToActive nn1 --forcemanual 
+You have specified the --forcemanual flag. This flag is dangerous, as it can induce a split-brain scenario that WILL CORRUPT your HDFS namespace, possibly irrecoverably.
+
+It is recommended not to use this flag, but instead to shut down the cluster and disable automatic failover if you prefer to manually manage your HA state.
+
+You may abort safely by answering 'n' or hitting ^C now.
+
+Are you sure you want to continue? (Y or N) Y
+19/01/09 20:43:21 WARN ha.HAAdmin: Proceeding with manual HA state management even though
+automatic failover is enabled for NameNode at h102/192.168.56.102:8020
+19/01/09 20:43:23 WARN ha.HAAdmin: Proceeding with manual HA state management even though
+automatic failover is enabled for NameNode at h101/192.168.56.101:8020
+```
+
+此时如果要再设置nn2为active就不行了
+
+提示：Node nn1 is already active
+
+```
+[hadoop@h102 ~]$ hdfs haadmin -transitionToActive nn2 --forcemanual
+You have specified the --forcemanual flag. This flag is dangerous, as it can induce a split-brain scenario that WILL CORRUPT your HDFS namespace, possibly irrecoverably.
+
+It is recommended not to use this flag, but instead to shut down the cluster and disable automatic failover if you prefer to manually manage your HA state.
+
+You may abort safely by answering 'n' or hitting ^C now.
+
+Are you sure you want to continue? (Y or N) Y
+19/01/09 20:46:05 WARN ha.HAAdmin: Proceeding with manual HA state management even though
+automatic failover is enabled for NameNode at h101/192.168.56.101:8020
+transitionToActive: Node nn1 is already active
+Usage: haadmin [-transitionToActive [--forceactive] <serviceId>]
+```
+
+到这里，手动故障转移已经完成，接下来配置自动故障转移
+
+
+
+### 自动故障转移
+
+先把整个集群关闭，zookeeper不关，输入bin/hdfs zkfc –formatZK，格式化ZKFC
+
+
+
+h102上观察zookeeper
+
+```
 [zk: localhost:2181(CONNECTED) 0] ls
-[zk: localhost:2181(CONNECTED) 1]
-
-[hadoop@h103 ~]$ zkCli.sh -server h104:2181
-...
-[zk: h104:2181(CONNECTED) 0] ls
-[zk: h104:2181(CONNECTED) 1] exit
-
-
+[zk: localhost:2181(CONNECTED) 1] ls /
+[project, zookeeper]
 ```
 
-#### 集群效果测试
+目前还没有ha相关的信息
 
-在h102上创建一个/project的项目
+执行formatZK之后
 
 ```
-[zk: h102:2181(CONNECTED) 0] create /project  zookeeper_project
-Created /project
-[zk: h102:2181(CONNECTED) 1] get /project
-zookeeper_project
-cZxid = 0x100000005
-ctime = Wed Jan 09 19:41:47 CST 2019
-mZxid = 0x100000005
-mtime = Wed Jan 09 19:41:47 CST 2019
-pZxid = 0x100000005
+[hadoop@h101 ~]$ hdfs zkfc -formatZK
+```
+
+多了hadoop-ha了
+
+```
+[zk: localhost:2181(CONNECTED) 2] ls /
+[project, hadoop-ha, zookeeper]
+[zk: localhost:2181(CONNECTED) 3] get /hadoop-ha
+
+cZxid = 0x100000014
+ctime = Wed Jan 09 20:48:13 CST 2019
+mZxid = 0x100000014
+mtime = Wed Jan 09 20:48:13 CST 2019
+pZxid = 0x100000015
+cversion = 1
+dataVersion = 0
+aclVersion = 0
+ephemeralOwner = 0x0
+dataLength = 0
+numChildren = 1
+[zk: localhost:2181(CONNECTED) 4] ls /hadoop-ha
+[hacluster]
+
+[zk: localhost:2181(CONNECTED) 5] get /hadoop-ha/hacluster
+
+cZxid = 0x100000015
+ctime = Wed Jan 09 20:48:13 CST 2019
+mZxid = 0x100000015
+mtime = Wed Jan 09 20:48:13 CST 2019
+pZxid = 0x100000015
 cversion = 0
 dataVersion = 0
 aclVersion = 0
 ephemeralOwner = 0x0
-dataLength = 17
+dataLength = 0
 numChildren = 0
 
+[zk: localhost:2181(CONNECTED) 6] ls /hadoop-ha/hacluster 
+[]
+```
+
+启动集群
+
+```
+[hadoop@h101 sbin]$ start-dfs.sh 
+Starting namenodes on [h101 h102]
+h101: starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h101.out
+h102: starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h102.out
+h103: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h103.out
+h104: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h104.out
+h102: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h102.out
+Starting journal nodes [h101 h102 h103]
+h103: starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h103.out
+h102: starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h102.out
+h101: starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h101.out
+Starting ZK Failover Controllers on NN hosts [h101 h102]
+h101: starting zkfc, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-zkfc-h101.out
+h102: starting zkfc, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-zkfc-h102.out
 ```
 
 
 
-h103和h104也能直接get到相同的信息
+启动后打开页面查看nn1为active，nn2为standby
+
+
+
+### 验证ha
+
+https://www.cnblogs.com/share23/p/9708473.html
+
+
+
+kill掉nn1的NameNode
 
 ```
-[zk: h103:2181(CONNECTED) 0] ls
-[zk: h103:2181(CONNECTED) 1] get /project
-zookeeper_project
-cZxid = 0x100000005
-ctime = Wed Jan 09 19:41:47 CST 2019
-mZxid = 0x100000005
-mtime = Wed Jan 09 19:41:47 CST 2019
-pZxid = 0x100000005
+[hadoop@h101 sbin]$ jps
+3831 JournalNode
+3623 NameNode
+4008 DFSZKFailoverController
+4078 Jps
+[hadoop@h101 sbin]$ kill 3623
+[hadoop@h101 sbin]$ kill 3623
+-bash: kill: (3623) - 没有那个进程
+[hadoop@h101 sbin]$ jps
+3831 JournalNode
+4105 Jps
+4008 DFSZKFailoverController
+```
+
+http://h101:50070/  访问不了了
+
+http://h102:50070/  还是standby
+
+
+
+```
+[zk: localhost:2181(CONNECTED) 10] ls /hadoop-ha/hacluster
+[ActiveBreadCrumb]
+
+[zk: localhost:2181(CONNECTED) 9] ls /hadoop-ha
+[hacluster]
+[zk: localhost:2181(CONNECTED) 10] ls /hadoop-ha/hacluster
+[ActiveBreadCrumb]
+[zk: localhost:2181(CONNECTED) 11] ls /hadoop-ha/hacluster/ActiveBreadCrumb
+[]
+[zk: localhost:2181(CONNECTED) 12] get /hadoop-ha/hacluster/ActiveBreadCrumb
+
+        haclusternn1h101 �>(�>
+cZxid = 0x100000019
+ctime = Wed Jan 09 21:14:16 CST 2019
+mZxid = 0x100000019
+mtime = Wed Jan 09 21:14:16 CST 2019
+pZxid = 0x100000019
 cversion = 0
 dataVersion = 0
 aclVersion = 0
 ephemeralOwner = 0x0
-dataLength = 17
+dataLength = 28
 numChildren = 0
+```
 
-[zk: h104:2181(CONNECTED) 2] ls      
-[zk: h104:2181(CONNECTED) 3] get /project
-zookeeper_project
-cZxid = 0x100000005
-ctime = Wed Jan 09 19:41:47 CST 2019
-mZxid = 0x100000005
-mtime = Wed Jan 09 19:41:47 CST 2019
-pZxid = 0x100000005
-cversion = 0
-dataVersion = 0
-aclVersion = 0
-ephemeralOwner = 0x0
-dataLength = 17
-numChildren = 0
-[zk: h104:2181(CONNECTED) 4] 
+配置正确的话，h102应该变为active了吧？
 
+
+
+参考：
+
+[ha切换不成功原因](ha切换不成功原因.md)
+
+```
+[hadoop@h102 logs]$ pwd
+/home/hadoop/hadoop-2.7.7/logs
+```
+
+报错日志：
+
+> 2019-01-09 21:16:08,290 WARN org.apache.hadoop.ha.SshFenceByTcpPort: PATH=$PATH:/sbin:/usr/sbin **fuser** -v -k -n tcp 8020 via ssh: bash: **fuse**
+> **r: 未找到命令**
+
+```
+2019-01-09 21:16:08,046 INFO org.apache.hadoop.ha.SshFenceByTcpPort: Looking for process running on port 8020
+2019-01-09 21:16:08,290 WARN org.apache.hadoop.ha.SshFenceByTcpPort: PATH=$PATH:/sbin:/usr/sbin fuser -v -k -n tcp 8020 via ssh: bash: fuse
+r: 未找到命令
+2019-01-09 21:16:08,290 INFO org.apache.hadoop.ha.SshFenceByTcpPort: rc: 127
+2019-01-09 21:16:08,290 INFO org.apache.hadoop.ha.SshFenceByTcpPort.jsch: Disconnecting from h101 port 22
+2019-01-09 21:16:08,295 WARN org.apache.hadoop.ha.NodeFencer: Fencing method org.apache.hadoop.ha.SshFenceByTcpPort(null) was unsuccessful.
+2019-01-09 21:16:08,295 ERROR org.apache.hadoop.ha.NodeFencer: Unable to fence service by any configured method.
+2019-01-09 21:16:08,296 WARN org.apache.hadoop.ha.ActiveStandbyElector: Exception handling the winning of election
+java.lang.RuntimeException: Unable to fence NameNode at h101/192.168.56.101:8020
+        at org.apache.hadoop.ha.ZKFailoverController.doFence(ZKFailoverController.java:533)
+        at org.apache.hadoop.ha.ZKFailoverController.fenceOldActive(ZKFailoverController.java:505)
+        at org.apache.hadoop.ha.ZKFailoverController.access$1100(ZKFailoverController.java:61)
+        at org.apache.hadoop.ha.ZKFailoverController$ElectorCallbacks.fenceOldActive(ZKFailoverController.java:892)
+        at org.apache.hadoop.ha.ActiveStandbyElector.fenceOldActive(ActiveStandbyElector.java:921)
+        at org.apache.hadoop.ha.ActiveStandbyElector.becomeActive(ActiveStandbyElector.java:820)
+        at org.apache.hadoop.ha.ActiveStandbyElector.processResult(ActiveStandbyElector.java:418)
+        at org.apache.zookeeper.ClientCnxn$EventThread.processEvent(ClientCnxn.java:599)
+        at org.apache.zookeeper.ClientCnxn$EventThread.run(ClientCnxn.java:498)
+2019-01-09 21:16:08,297 INFO org.apache.hadoop.ha.ActiveStandbyElector: Trying to re-establish ZK session
 ```
 
 
 
+```
+在zkfc的日志里面，有一个warn：PATH=$PATH:/sbin:/usr/sbin fuser -v -k -n tcp 8090 via ssh: bash: fuser: 未找到命令
+原因是最小化安装centos的时候，没有fuser这个命令，导致无法fence
+yum install psmisc就行了
+```
 
 
 
+解决
+
+```
+[root@h101 ~]# cexec mount /dev/cdrom /media/cdrom
+************************* h *************************
+--------- h101---------
+mount: /dev/sr0 写保护，将以只读方式挂载
+--------- h102---------
+mount: /dev/sr0 写保护，将以只读方式挂载
+--------- h103---------
+mount: 在 /dev/sr0 上找不到媒体
+--------- h104---------
+mount: /dev/sr0 写保护，将以只读方式挂载
+[root@h101 ~]# cexec mount /dev/cdrom /media/cdrom
+************************* h *************************
+--------- h101---------
+mount: /dev/sr0 写保护，将以只读方式挂载
+mount: /dev/sr0 已经挂载或 /media/cdrom 忙
+       /dev/sr0 已经挂载到 /media/cdrom 上
+--------- h102---------
+mount: /dev/sr0 写保护，将以只读方式挂载
+mount: /dev/sr0 已经挂载或 /media/cdrom 忙
+       /dev/sr0 已经挂载到 /media/cdrom 上
+--------- h103---------
+mount: /dev/sr0 写保护，将以只读方式挂载
+--------- h104---------
+mount: /dev/sr0 写保护，将以只读方式挂载
+mount: /dev/sr0 已经挂载或 /media/cdrom 忙
+       /dev/sr0 已经挂载到 /media/cdrom 上
+[root@h101 ~]# cexec yum install psmisc -y
+************************* h *************************
+--------- h101---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+正在解决依赖关系
+--> 正在检查事务
+---> 软件包 psmisc.x86_64.0.22.20-15.el7 将被 安装
+--> 解决依赖关系完成
+
+依赖关系解决
+
+================================================================================
+ Package         架构            版本                   源                 大小
+================================================================================
+正在安装:
+ psmisc          x86_64          22.20-15.el7           c7-media          141 k
+
+事务概要
+================================================================================
+安装  1 软件包
+
+总下载量：141 k
+安装大小：475 k
+Downloading packages:
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  正在安装    : psmisc-22.20-15.el7.x86_64                                  1/1 
+  验证中      : psmisc-22.20-15.el7.x86_64                                  1/1 
+
+已安装:
+  psmisc.x86_64 0:22.20-15.el7                                                  
+
+完毕！
+--------- h102---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+正在解决依赖关系
+--> 正在检查事务
+---> 软件包 psmisc.x86_64.0.22.20-15.el7 将被 安装
+--> 解决依赖关系完成
+
+依赖关系解决
+
+================================================================================
+ Package         架构            版本                   源                 大小
+================================================================================
+正在安装:
+ psmisc          x86_64          22.20-15.el7           c7-media          141 k
+
+事务概要
+================================================================================
+安装  1 软件包
+
+总下载量：141 k
+安装大小：475 k
+Downloading packages:
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  正在安装    : psmisc-22.20-15.el7.x86_64                                  1/1 
+  验证中      : psmisc-22.20-15.el7.x86_64                                  1/1 
+
+已安装:
+  psmisc.x86_64 0:22.20-15.el7                                                  
+
+完毕！
+--------- h103---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+正在解决依赖关系
+--> 正在检查事务
+---> 软件包 psmisc.x86_64.0.22.20-15.el7 将被 安装
+--> 解决依赖关系完成
+
+依赖关系解决
+
+================================================================================
+ Package         架构            版本                   源                 大小
+================================================================================
+正在安装:
+ psmisc          x86_64          22.20-15.el7           c7-media          141 k
+
+事务概要
+================================================================================
+安装  1 软件包
+
+总下载量：141 k
+安装大小：475 k
+Downloading packages:
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  正在安装    : psmisc-22.20-15.el7.x86_64                                  1/1 
+  验证中      : psmisc-22.20-15.el7.x86_64                                  1/1 
+
+已安装:
+  psmisc.x86_64 0:22.20-15.el7                                                  
+
+完毕！
+--------- h104---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+正在解决依赖关系
+--> 正在检查事务
+---> 软件包 psmisc.x86_64.0.22.20-15.el7 将被 安装
+--> 解决依赖关系完成
+
+依赖关系解决
+
+================================================================================
+ Package         架构            版本                   源                 大小
+================================================================================
+正在安装:
+ psmisc          x86_64          22.20-15.el7           c7-media          141 k
+
+事务概要
+================================================================================
+安装  1 软件包
+
+总下载量：141 k
+安装大小：475 k
+Downloading packages:
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  正在安装    : psmisc-22.20-15.el7.x86_64                                  1/1 
+  验证中      : psmisc-22.20-15.el7.x86_64                                  1/1 
+
+已安装:
+  psmisc.x86_64 0:22.20-15.el7                                                  
+
+完毕！
+[root@h101 ~]# cexec which fuser
+************************* h *************************
+--------- h101---------
+/usr/sbin/fuser
+--------- h102---------
+/usr/sbin/fuser
+--------- h103---------
+/usr/sbin/fuser
+--------- h104---------
+/usr/sbin/fuser
+```
 
 
 
+处理完之后，就可以自动切换了。
+
+启动后nn1为active，nn2为standby
+
+kill掉nn1的namenode进程后nn2的namenode变为active
 
 
 
+日志中还有一个报错，虽然这里没有影响ha切换，但是还是要解决掉好，肯定其他地方有用到了
+
+2019-01-09 21:37:28,476 **WARN** org.apache.hadoop.ha.SshFenceByTcpPort: nc -z h101 8020 via ssh: bash: nc: 未找到命令
+
+```
+[root@h101 ~]# cexec yum install nc -y
+************************* h *************************
+--------- h101---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+软件包 2:nmap-ncat-6.40-13.el7.x86_64 已安装并且是最新版本
+无须任何处理
+--------- h102---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+正在解决依赖关系
+--> 正在检查事务
+---> 软件包 nmap-ncat.x86_64.2.6.40-13.el7 将被 安装
+--> 正在处理依赖关系 libpcap.so.1()(64bit)，它被软件包 2:nmap-ncat-6.40-13.el7.x86_64 需要
+--> 正在检查事务
+---> 软件包 libpcap.x86_64.14.1.5.3-11.el7 将被 安装
+--> 解决依赖关系完成
+
+依赖关系解决
+
+================================================================================
+ Package          架构          版本                      源               大小
+================================================================================
+正在安装:
+ nmap-ncat        x86_64        2:6.40-13.el7             c7-media        205 k
+为依赖而安装:
+ libpcap          x86_64        14:1.5.3-11.el7           c7-media        138 k
+
+事务概要
+================================================================================
+安装  1 软件包 (+1 依赖软件包)
+
+总下载量：343 k
+安装大小：740 k
+Downloading packages:
+--------------------------------------------------------------------------------
+总计                                                21 MB/s | 343 kB  00:00     
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  正在安装    : 14:libpcap-1.5.3-11.el7.x86_64                              1/2 
+  正在安装    : 2:nmap-ncat-6.40-13.el7.x86_64                              2/2 
+  验证中      : 14:libpcap-1.5.3-11.el7.x86_64                              1/2 
+  验证中      : 2:nmap-ncat-6.40-13.el7.x86_64                              2/2 
+
+已安装:
+  nmap-ncat.x86_64 2:6.40-13.el7                                                
+
+作为依赖被安装:
+  libpcap.x86_64 14:1.5.3-11.el7                                                
+
+完毕！
+--------- h103---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+正在解决依赖关系
+--> 正在检查事务
+---> 软件包 nmap-ncat.x86_64.2.6.40-13.el7 将被 安装
+--> 正在处理依赖关系 libpcap.so.1()(64bit)，它被软件包 2:nmap-ncat-6.40-13.el7.x86_64 需要
+--> 正在检查事务
+---> 软件包 libpcap.x86_64.14.1.5.3-11.el7 将被 安装
+--> 解决依赖关系完成
+
+依赖关系解决
+
+================================================================================
+ Package          架构          版本                      源               大小
+================================================================================
+正在安装:
+ nmap-ncat        x86_64        2:6.40-13.el7             c7-media        205 k
+为依赖而安装:
+ libpcap          x86_64        14:1.5.3-11.el7           c7-media        138 k
+
+事务概要
+================================================================================
+安装  1 软件包 (+1 依赖软件包)
+
+总下载量：343 k
+安装大小：740 k
+Downloading packages:
+--------------------------------------------------------------------------------
+总计                                                25 MB/s | 343 kB  00:00     
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  正在安装    : 14:libpcap-1.5.3-11.el7.x86_64                              1/2 
+  正在安装    : 2:nmap-ncat-6.40-13.el7.x86_64                              2/2 
+  验证中      : 14:libpcap-1.5.3-11.el7.x86_64                              1/2 
+  验证中      : 2:nmap-ncat-6.40-13.el7.x86_64                              2/2 
+
+已安装:
+  nmap-ncat.x86_64 2:6.40-13.el7                                                
+
+作为依赖被安装:
+  libpcap.x86_64 14:1.5.3-11.el7                                                
+
+完毕！
+--------- h104---------
+已加载插件：fastestmirror
+Loading mirror speeds from cached hostfile
+ * c7-media: 
+正在解决依赖关系
+--> 正在检查事务
+---> 软件包 nmap-ncat.x86_64.2.6.40-13.el7 将被 安装
+--> 正在处理依赖关系 libpcap.so.1()(64bit)，它被软件包 2:nmap-ncat-6.40-13.el7.x86_64 需要
+--> 正在检查事务
+---> 软件包 libpcap.x86_64.14.1.5.3-11.el7 将被 安装
+--> 解决依赖关系完成
+
+依赖关系解决
+
+================================================================================
+ Package          架构          版本                      源               大小
+================================================================================
+正在安装:
+ nmap-ncat        x86_64        2:6.40-13.el7             c7-media        205 k
+为依赖而安装:
+ libpcap          x86_64        14:1.5.3-11.el7           c7-media        138 k
+
+事务概要
+================================================================================
+安装  1 软件包 (+1 依赖软件包)
+
+总下载量：343 k
+安装大小：740 k
+Downloading packages:
+--------------------------------------------------------------------------------
+总计                                                22 MB/s | 343 kB  00:00     
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  正在安装    : 14:libpcap-1.5.3-11.el7.x86_64                              1/2 
+  正在安装    : 2:nmap-ncat-6.40-13.el7.x86_64                              2/2 
+  验证中      : 14:libpcap-1.5.3-11.el7.x86_64                              1/2 
+  验证中      : 2:nmap-ncat-6.40-13.el7.x86_64                              2/2 
+
+已安装:
+  nmap-ncat.x86_64 2:6.40-13.el7                                                
+
+作为依赖被安装:
+  libpcap.x86_64 14:1.5.3-11.el7                                                
+
+完毕！
+
+
+[root@h101 ~]# cexec which nc
+************************* h *************************
+--------- h101---------
+/usr/bin/nc
+--------- h102---------
+/usr/bin/nc
+--------- h103---------
+/usr/bin/nc
+--------- h104---------
+/usr/bin/nc
+```
 
 
 
+重新启动h101的namenode
 
+```
+cd /home/hadoop/hadoop-2.7.7/sbin
+[hadoop@h101 sbin]$ ./hadoop-daemon.sh start namenode
+starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h101.out
+```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+这时候h102还是active, 新启动的h101变为standby了
 
 
 
