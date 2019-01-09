@@ -1347,3 +1347,426 @@ active
 ```
 
 https://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/ResourceManagerHA.html
+
+
+
+### 关闭
+
+#### 关yarn
+
+```
+[hadoop@h102 ~]$ stop-yarn.sh
+stopping yarn daemons
+stopping resourcemanager
+h103: stopping nodemanager
+h102: stopping nodemanager
+h104: stopping nodemanager
+no proxyserver to stop
+```
+
+
+
+h103也要单独关
+
+```
+[hadoop@h103 sbin]$ ./yarn-daemon.sh  stop resourcemanager
+```
+
+
+
+#### 关hdfs
+
+```
+[hadoop@h101 ~]$ stop-dfs.sh
+Stopping namenodes on [h101 h102]
+h101: stopping namenode
+h102: stopping namenode
+h104: stopping datanode
+h103: stopping datanode
+h102: stopping datanode
+Stopping journal nodes [h101 h102 h103]
+h101: stopping journalnode
+h103: stopping journalnode
+h102: stopping journalnode
+Stopping ZK Failover Controllers on NN hosts [h101 h102]
+h101: stopping zkfc
+h102: stopping zkfc
+```
+
+
+
+#### 关zookeeper
+
+```
+[hadoop@h102 ~]$ zkServer.sh stop
+ZooKeeper JMX enabled by default
+Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Stopping zookeeper ... STOPPED
+
+[hadoop@h104 ~]$ zkServer.sh stop
+ZooKeeper JMX enabled by default
+Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Stopping zookeeper ... STOPPED
+
+[hadoop@h103 ~]$ zkServer.sh stop
+ZooKeeper JMX enabled by default
+Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Stopping zookeeper ... STOPPED
+```
+
+
+
+#### 都关闭检查进程
+
+```
+[hadoop@h101 ~]$ cexec /usr/local/java7/bin/jps
+************************* h *************************
+--------- h101---------
+11650 Jps
+--------- h102---------
+8224 Jps
+--------- h103---------
+4412 Jps
+--------- h104---------
+3561 Jps
+```
+
+
+
+### 启动
+
+#### 启动zookeeper
+
+```
+[hadoop@h102 ~]$ zkServer.sh start
+ZooKeeper JMX enabled by default
+Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Starting zookeeper ... STARTED
+
+[hadoop@h103 ~]$ zkServer.sh start
+ZooKeeper JMX enabled by default
+Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Starting zookeeper ... STARTED
+
+[hadoop@h104 ~]$ zkServer.sh start
+ZooKeeper JMX enabled by default
+Using config: /home/hadoop/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Starting zookeeper ... STARTED
+
+```
+
+#### 启动hdfs
+
+```
+[hadoop@h101 ~]$ start-dfs.sh
+Starting namenodes on [h101 h102]
+h101: starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h101.out
+h102: starting namenode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-namenode-h102.out
+h103: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h103.out
+h104: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h104.out
+h102: starting datanode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-datanode-h102.out
+Starting journal nodes [h101 h102 h103]
+h101: starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h101.out
+h103: starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h103.out
+h102: starting journalnode, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-journalnode-h102.out
+Starting ZK Failover Controllers on NN hosts [h101 h102]
+h101: starting zkfc, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-zkfc-h101.out
+h102: starting zkfc, logging to /home/hadoop/hadoop-2.7.7/logs/hadoop-hadoop-zkfc-h102.out
+```
+
+#### 启动yarn
+
+```
+[hadoop@h102 ~]$ start-yarn.sh
+starting yarn daemons
+starting resourcemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-resourcemanager-h102.out
+h103: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h103.out
+h104: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h104.out
+h102: starting nodemanager, logging to /home/hadoop/hadoop-2.7.7/logs/yarn-hadoop-nodemanager-h102.out
+```
+
+h103上的yarn单独启动
+
+```
+cd ~/hadoop-2.7.7/sbin/
+[hadoop@h103 ~]$ ./yarn-daemon.sh start resourcemanager
+```
+
+
+
+#### 启动后进程
+
+```
+[hadoop@h101 ~]$ cexec /usr/local/java7/bin/jps
+************************* h *************************
+--------- h101---------
+12167 DFSZKFailoverController
+11989 JournalNode
+12329 Jps
+11779 NameNode
+--------- h102---------
+8725 ResourceManager
+8332 NameNode
+8406 DataNode
+8837 NodeManager
+8624 DFSZKFailoverController
+8505 JournalNode
+8251 QuorumPeerMain
+9080 Jps
+--------- h103---------
+4438 QuorumPeerMain
+5283 Jps
+5007 NodeManager
+4600 JournalNode
+4503 DataNode
+4703 ResourceManager
+--------- h104---------
+3646 DataNode
+3764 NodeManager
+3951 Jps
+3587 QuorumPeerMain
+```
+
+
+
+### cexec环境变量问题
+
+```
+[hadoop@h101 ~]$ cexec env
+************************* h *************************
+--------- h101---------
+XDG_SESSION_ID=371
+SELINUX_ROLE_REQUESTED=
+SHELL=/bin/bash
+SSH_CLIENT=192.168.56.101 41054 22
+SELINUX_USE_CURRENT_RANGE=
+USER=hadoop
+MAIL=/var/mail/hadoop
+PATH=/usr/local/bin:/usr/bin
+PWD=/home/hadoop
+LANG=zh_CN.UTF-8
+SELINUX_LEVEL_REQUESTED=
+SHLVL=1
+HOME=/home/hadoop
+LOGNAME=hadoop
+SSH_CONNECTION=192.168.56.101 41054 192.168.56.101 22
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+XDG_RUNTIME_DIR=/run/user/1001
+_=/usr/bin/env
+--------- h102---------
+XDG_SESSION_ID=70
+SELINUX_ROLE_REQUESTED=
+SHELL=/bin/bash
+SSH_CLIENT=192.168.56.101 47504 22
+SELINUX_USE_CURRENT_RANGE=
+USER=hadoop
+MAIL=/var/mail/hadoop
+PATH=/usr/local/bin:/usr/bin
+PWD=/home/hadoop
+LANG=zh_CN.UTF-8
+SELINUX_LEVEL_REQUESTED=
+SHLVL=1
+HOME=/home/hadoop
+LOGNAME=hadoop
+SSH_CONNECTION=192.168.56.101 47504 192.168.56.102 22
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+XDG_RUNTIME_DIR=/run/user/1001
+_=/usr/bin/env
+--------- h103---------
+XDG_SESSION_ID=57
+SELINUX_ROLE_REQUESTED=
+SHELL=/bin/bash
+SSH_CLIENT=192.168.56.101 36882 22
+SELINUX_USE_CURRENT_RANGE=
+USER=hadoop
+MAIL=/var/mail/hadoop
+PATH=/usr/local/bin:/usr/bin
+PWD=/home/hadoop
+LANG=zh_CN.UTF-8
+SELINUX_LEVEL_REQUESTED=
+SHLVL=1
+HOME=/home/hadoop
+LOGNAME=hadoop
+SSH_CONNECTION=192.168.56.101 36882 192.168.56.103 22
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+XDG_RUNTIME_DIR=/run/user/1000
+_=/usr/bin/env
+--------- h104---------
+XDG_SESSION_ID=51
+SELINUX_ROLE_REQUESTED=
+SHELL=/bin/bash
+SSH_CLIENT=192.168.56.101 54978 22
+SELINUX_USE_CURRENT_RANGE=
+USER=hadoop
+MAIL=/var/mail/hadoop
+PATH=/usr/local/bin:/usr/bin
+PWD=/home/hadoop
+LANG=zh_CN.UTF-8
+SELINUX_LEVEL_REQUESTED=
+SHLVL=1
+HOME=/home/hadoop
+LOGNAME=hadoop
+SSH_CONNECTION=192.168.56.101 54978 192.168.56.104 22
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+XDG_RUNTIME_DIR=/run/user/1000
+_=/usr/bin/env
+```
+
+这里PATH都只有/usr/local/bin:/usr/bin
+
+
+
+这是因为ssh的环境变量就是这样
+
+```
+[hadoop@h101 ~]$ ssh h102 "env"
+XDG_SESSION_ID=76
+SELINUX_ROLE_REQUESTED=
+SHELL=/bin/bash
+SSH_CLIENT=192.168.56.101 47558 22
+SELINUX_USE_CURRENT_RANGE=
+USER=hadoop
+MAIL=/var/mail/hadoop
+PATH=/usr/local/bin:/usr/bin
+PWD=/home/hadoop
+LANG=zh_CN.UTF-8
+SELINUX_LEVEL_REQUESTED=
+SHLVL=1
+HOME=/home/hadoop
+LOGNAME=hadoop
+SSH_CONNECTION=192.168.56.101 47558 192.168.56.102 22
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+XDG_RUNTIME_DIR=/run/user/1001
+_=/usr/bin/env
+```
+
+
+
+参考
+
+ [解决SSH远程执行命令找不到环境变量的问题](https://www.cnblogs.com/zhenyuyaodidiao/p/9287497.html)
+
+```
+1. 通过SSH登录后再执行命令和脚本
+这种方式会使用Bash的interactive + login shell模式，这里面有两个概念需要解释：interactive和login。
+
+login故名思义，即登陆，login shell是指用户以非图形化界面或者以ssh登陆到机器上时获得的第一个shell，简单些说就是需要输入用户名和密码的shell。因此通常不管以何种方式登陆机器后用户获得的第一个shell就是login shell。
+
+interactive意为交互式，这也很好理解，interactive shell会有一个输入提示符，并且它的标准输入、输出和错误输出都会显示在控制台上。所以一般来说只要是需要用户交互的，即一个命令一个命令的输入的shell都是interactive shell。而如果无需用户交互，它便是non-interactive shell。通常来说如bash script.sh此类执行脚本的命令就会启动一个non-interactive shell，它不需要与用户进行交互，执行完后它便会退出创建的Shell。
+
+在interactive + login shell模式中，Shell首先会加载/etc/profile文件，然后再尝试依次去加载下列三个配置文件之一，一旦找到其中一个便不再接着寻找：
+
+~/.bash_profile
+~/.bash_login
+~/.profile
+2. 通过SSH直接执行远程命令和脚本
+这种方式会使用Bash的non-interactive + non-login shell模式，它会创建一个shell，执行完脚本之后便退出，不再需要与用户交互。
+
+no-login shell，顾名思义就是不是在登录Linux系统时启动的（比如你在命令行提示符上输入bash启动）。它不会去执行/etc/profile文件，而会去用户的HOME目录检查.bashrc并加载。
+
+系统执行Shell脚本的时候，就是属于这种non-interactive shell。Bash通过BASH_ENV环境变量来记录要加载的文件，默认情况下这个环境变量并没有设置。如果有指定文件，那么Shell会先去加载这个文件里面的内容，然后再开始执行Shell脚本。
+
+3. 结论
+由此可见，如果要解决SSH远程执行命令时找不到自定义环境变量的问题，那么可以在登录用户的HOME目录的.bashrc中添加需要的环境变量。
+```
+
+解决，将需要的$PATH环境变量添加到.bashrc文件中去
+
+```
+[hadoop@h101 ~]$ vi .bashrc
+# .bashrc
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+        . /etc/bashrc
+fi
+
+# Uncomment the following line if you don't like systemctl's auto-paging feature:
+# export SYSTEMD_PAGER=
+
+# User specific aliases and functions
+PATH=$PATH:$HOME/.local/bin:$HOME/bin
+
+export PATH
+export C3_HOME=/opt/c3
+export PATH=$C3_HOME/usr/bin:$PATH
+export MANPATH=$MANPATH:$C3_HOME/doc/man
+
+export JAVA_HOME=/usr/local/java7
+export PATH=$JAVA_HOME/bin:$PATH
+
+export HADOOP_HOME=/home/hadoop/hadoop-2.7.7
+export PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
+
+export ZK_HOME=$HOME/zookeeper-3.4.12
+export PATH=$ZK_HOME/bin:$PATH
+```
+
+```
+[hadoop@h101 ~]$ cpush .bashrc /home/hadoop/.bashrc
+```
+
+果然环境变量就有了
+
+```
+[hadoop@h101 ~]$ ssh h102 env
+MANPATH=:/opt/c3/doc/man
+XDG_SESSION_ID=85
+SELINUX_ROLE_REQUESTED=
+SHELL=/bin/bash
+HADOOP_HOME=/home/hadoop/hadoop-2.7.7
+SSH_CLIENT=192.168.56.101 47636 22
+SELINUX_USE_CURRENT_RANGE=
+ZK_HOME=/home/hadoop/zookeeper-3.4.12
+USER=hadoop
+MAIL=/var/mail/hadoop
+PATH=/home/hadoop/zookeeper-3.4.12/bin:/home/hadoop/hadoop-2.7.7/bin:/home/hadoop/hadoop-2.7.7/sbin:/usr/local/java7/bin:/opt/c3/usr/bin:/usr/local/bin:/usr/bin:/home/hadoop/.local/bin:/home/hadoop/bin
+C3_HOME=/opt/c3
+PWD=/home/hadoop
+JAVA_HOME=/usr/local/java7
+LANG=zh_CN.UTF-8
+SELINUX_LEVEL_REQUESTED=
+SHLVL=1
+HOME=/home/hadoop
+LOGNAME=hadoop
+SSH_CONNECTION=192.168.56.101 47636 192.168.56.102 22
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+XDG_RUNTIME_DIR=/run/user/1001
+_=/usr/bin/env
+```
+
+
+
+命令也能找到了
+
+```
+[hadoop@h101 ~]$ cexec jps
+************************* h *************************
+--------- h101---------
+12167 DFSZKFailoverController
+11989 JournalNode
+28898 Jps
+11779 NameNode
+--------- h102---------
+8725 ResourceManager
+8332 NameNode
+17059 Jps
+8406 DataNode
+8837 NodeManager
+8624 DFSZKFailoverController
+8505 JournalNode
+8251 QuorumPeerMain
+--------- h103---------
+4438 QuorumPeerMain
+5007 NodeManager
+5450 Jps
+4600 JournalNode
+4503 DataNode
+4703 ResourceManager
+--------- h104---------
+4146 Jps
+3646 DataNode
+3764 NodeManager
+3587 QuorumPeerMain
+```
+
