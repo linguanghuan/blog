@@ -1770,3 +1770,262 @@ _=/usr/bin/env
 3587 QuorumPeerMain
 ```
 
+
+
+
+
+### put本地文件到hdfs
+
+```
+[hadoop@h101 ~]$ echo "11111111111111111111111111111111111" > hdfstest.txt
+
+[hadoop@h101 ~]$ hdfs dfs -put -f hdfstest.txt /  
+```
+
+
+
+### 删除hdfs文件
+
+```
+[hadoop@h101 ~]$ hdfs dfs -rm /hdfstest.txt 
+19/01/10 19:18:17 INFO fs.TrashPolicyDefault: Namenode trash configuration: Deletion interval = 0 minutes, Emptier interval = 0 minutes.
+Deleted /hdfstest.txt
+```
+
+
+
+### 执行wordcount 程序
+
+上传README.txt到hdfs
+
+```
+cd $HADOOP_HOME
+
+[hadoop@h101 hadoop-2.7.7]$ hdfs dfs -put README.txt /
+[hadoop@h101 hadoop-2.7.7]$ hdfs dfs -mkdir /input
+[hadoop@h101 hadoop-2.7.7]$ hdfs dfs -mv /README.txt /input
+```
+
+
+
+运行wordcount程序
+
+```
+[hadoop@h101 hadoop-2.7.7]$ hadoop jar ./share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.7.jar wordcount /input /output
+19/01/10 19:25:21 INFO input.FileInputFormat: Total input paths to process : 1
+19/01/10 19:25:21 INFO mapreduce.JobSubmitter: number of splits:1
+19/01/10 19:25:22 INFO mapreduce.JobSubmitter: Submitting tokens for job: job_1547118621617_0001
+19/01/10 19:25:22 INFO impl.YarnClientImpl: Submitted application application_1547118621617_0001
+19/01/10 19:25:22 INFO mapreduce.Job: The url to track the job: http://h102:8088/proxy/application_1547118621617_0001/
+19/01/10 19:25:22 INFO mapreduce.Job: Running job: job_1547118621617_0001
+19/01/10 19:25:34 INFO mapreduce.Job: Job job_1547118621617_0001 running in uber mode : false
+19/01/10 19:25:34 INFO mapreduce.Job:  map 0% reduce 0%
+19/01/10 19:25:42 INFO mapreduce.Job:  map 100% reduce 0%
+19/01/10 19:25:53 INFO mapreduce.Job:  map 100% reduce 100%
+19/01/10 19:25:53 INFO mapreduce.Job: Job job_1547118621617_0001 completed successfully
+19/01/10 19:25:53 INFO mapreduce.Job: Counters: 49
+        File System Counters
+                FILE: Number of bytes read=1836
+                FILE: Number of bytes written=253989
+                FILE: Number of read operations=0
+                FILE: Number of large read operations=0
+                FILE: Number of write operations=0
+                HDFS: Number of bytes read=1464
+                HDFS: Number of bytes written=1306
+                HDFS: Number of read operations=6
+                HDFS: Number of large read operations=0
+                HDFS: Number of write operations=2
+        Job Counters 
+                Launched map tasks=1
+                Launched reduce tasks=1
+                Data-local map tasks=1
+                Total time spent by all maps in occupied slots (ms)=6358
+                Total time spent by all reduces in occupied slots (ms)=7625
+                Total time spent by all map tasks (ms)=6358
+                Total time spent by all reduce tasks (ms)=7625
+                Total vcore-milliseconds taken by all map tasks=6358
+                Total vcore-milliseconds taken by all reduce tasks=7625
+                Total megabyte-milliseconds taken by all map tasks=6510592
+                Total megabyte-milliseconds taken by all reduce tasks=7808000
+        Map-Reduce Framework
+                Map input records=31
+                Map output records=179
+                Map output bytes=2055
+                Map output materialized bytes=1836
+                Input split bytes=98
+                Combine input records=179
+                Combine output records=131
+                Reduce input groups=131
+                Reduce shuffle bytes=1836
+                Reduce input records=131
+                Reduce output records=131
+                Spilled Records=262
+                Shuffled Maps =1
+                Failed Shuffles=0
+                Merged Map outputs=1
+                GC time elapsed (ms)=225
+                CPU time spent (ms)=1950
+                Physical memory (bytes) snapshot=366780416
+                Virtual memory (bytes) snapshot=1763467264
+                Total committed heap usage (bytes)=168562688
+        Shuffle Errors
+                BAD_ID=0
+                CONNECTION=0
+                IO_ERROR=0
+                WRONG_LENGTH=0
+                WRONG_MAP=0
+                WRONG_REDUCE=0
+        File Input Format Counters 
+                Bytes Read=1366
+        File Output Format Counters 
+                Bytes Written=1306
+```
+
+yarn的web界面也可以看到作业的状态
+
+http://h102:8088/cluster
+
+运行结果：
+
+```
+[hadoop@h101 hadoop-2.7.7]$ hdfs dfs -ls /
+Found 3 items
+drwxr-xr-x   - hadoop supergroup          0 2019-01-10 19:23 /input
+drwxr-xr-x   - hadoop supergroup          0 2019-01-10 19:25 /output
+drwx------   - hadoop supergroup          0 2019-01-10 19:25 /tmp
+[hadoop@h101 hadoop-2.7.7]$ hdfs dfs -cat /output/*
+(BIS),  1
+(ECCN)  1
+(TSU)   1
+(see    1
+5D002.C.1,      1
+740.13) 1
+<http://www.wassenaar.org/>     1
+Administration  1
+Apache  1
+BEFORE  1
+BIS     1
+Bureau  1
+Commerce,       1
+Commodity       1
+Control 1
+Core    1
+Department      1
+ENC     1
+Exception       1
+Export  2
+For     1
+Foundation      1
+Government      1
+Hadoop  1
+Hadoop, 1
+Industry        1
+Jetty   1
+License 1
+Number  1
+Regulations,    1
+SSL     1
+Section 1
+Security        1
+See     1
+Software        2
+Technology      1
+The     4
+This    1
+U.S.    1
+Unrestricted    1
+about   1
+algorithms.     1
+and     6
+and/or  1
+another 1
+any     1
+as      1
+asymmetric      1
+at:     2
+both    1
+by      1
+check   1
+classified      1
+code    1
+code.   1
+concerning      1
+country 1
+country's       1
+country,        1
+cryptographic   3
+currently       1
+details 1
+distribution    2
+eligible        1
+encryption      3
+exception       1
+export  1
+following       1
+for     3
+form    1
+from    1
+functions       1
+has     1
+have    1
+http://hadoop.apache.org/core/  1
+http://wiki.apache.org/hadoop/  1
+if      1
+import, 2
+in      1
+included        1
+includes        2
+information     2
+information.    1
+is      1
+it      1
+latest  1
+laws,   1
+libraries       1
+makes   1
+manner  1
+may     1
+more    2
+mortbay.org.    1
+object  1
+of      5
+on      2
+or      2
+our     2
+performing      1
+permitted.      1
+please  2
+policies        1
+possession,     2
+project 1
+provides        1
+re-export       2
+regulations     1
+reside  1
+restrictions    1
+security        1
+see     1
+software        2
+software,       2
+software.       2
+software:       1
+source  1
+the     8
+this    3
+to      2
+under   1
+use,    2
+uses    1
+using   2
+visit   1
+website 1
+which   2
+wiki,   1
+with    1
+written 1
+you     1
+your    1
+```
+
+
+
