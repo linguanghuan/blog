@@ -12,7 +12,7 @@
 
 [hadoop高可用配置](hadoop高可用配置.md)
 
-
+[hbase集群安装](hbase集群安装.md)
 
 
 
