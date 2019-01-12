@@ -124,7 +124,7 @@ export PATH=$HIVE_HOME/bin:$PATH
 
 
 
-## 配置hive-default.xml
+## 配置hive-site.xml
 
 ```
 cd /home/hadoop/apache-hive-2.3.4-bin/conf
@@ -171,6 +171,21 @@ javax.jdo.option.ConnectionPassword
 ```
 
 相应的改为mysql数据库连接的用户名密码
+
+
+
+其实hive-defalut.xml中的配置是默认配置不要动。要覆盖的话，新建一个hive-site.xml即可。
+
+参考:[HIVE 2.3.4 本地安装与部署 （Ubuntu）](https://www.cnblogs.com/standingby/p/10039974.html)
+
+> 进入hive配置目录：
+> `cd /usr/local/hive/conf`
+> 将hive-default.xml.template重命名为hive-default.xml
+> `sudo mv hive-default.xml.template hive-default.xml`
+> 新建一个配置文件hive-site.xml并编辑
+> `sudo vim hive-site.xml`
+> 在hive-site.xml中写入MySQL配置信息（虽然我们还没有安装MySQL）：
+>
 
 
 
@@ -348,7 +363,269 @@ schemaTool completed
 
 # hive测试
 
+输入hive
 
+报错:
+
+```
+[hadoop@h101 ~]$ hive
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/log4j-slf4j-impl-2.6.2.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/home/hadoop/hadoop-2.7.7/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+
+Logging initialized using configuration in jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/hive-common-2.3.4.jar!/hive-log4j2.properties Async: true
+
+Exception in thread "main" java.lang.RuntimeException: org.apache.hadoop.ipc.RemoteException(org.apache.hadoop.ipc.StandbyException): Operation category READ is not supported in state standby
+        at org.apache.hadoop.hdfs.server.namenode.ha.StandbyState.checkOperation(StandbyState.java:87)
+        at org.apache.hadoop.hdfs.server.namenode.NameNode$NameNodeHAContext.checkOperation(NameNode.java:1802)
+        at org.apache.hadoop.hdfs.server.namenode.FSNamesystem.checkOperation(FSNamesystem.java:1321)
+        at org.apache.hadoop.hdfs.server.namenode.FSNamesystem.getFileInfo(FSNamesystem.java:3829)
+        at org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer.getFileInfo(NameNodeRpcServer.java:1012)
+        at org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolServerSideTranslatorPB.getFileInfo(ClientNamenodeProtocolServerSideTranslatorPB.java:855)
+        at org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos$ClientNamenodeProtocol$2.callBlockingMethod(ClientNamenodeProtocolProtos.java)
+        at org.apache.hadoop.ipc.ProtobufRpcEngine$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine.java:616)
+        at org.apache.hadoop.ipc.RPC$Server.call(RPC.java:982)
+        at org.apache.hadoop.ipc.Server$Handler$1.run(Server.java:2217)
+        at org.apache.hadoop.ipc.Server$Handler$1.run(Server.java:2213)
+        at java.security.AccessController.doPrivileged(Native Method)
+```
+
+搜索
+
+```
+Operation category READ is not supported in state standby
+```
+
+输入:
+
+http://h101:50070/ namenode web访问不了（代理问题）
+
+重启hdfs看下
+
+
+
+发现h101和h102两个namenode都是standby
+
+重启观察hadoop，发现后面有一个namenode为active了
+
+再执行，有新的报错
+
+```
+[hadoop@h101 ~]$ hive
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/log4j-slf4j-impl-2.6.2.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/home/hadoop/hadoop-2.7.7/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+
+Logging initialized using configuration in jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/hive-common-2.3.4.jar!/hive-log4j2.properties Async: true
+Exception in thread "main" java.lang.IllegalArgumentException: java.net.URISyntaxException: Relative path in absolute URI: ${system:java.io.tmpdir%7D/$%7Bsystem:user.name%7D
+        at org.apache.hadoop.fs.Path.initialize(Path.java:205)
+        at org.apache.hadoop.fs.Path.<init>(Path.java:171)
+        at org.apache.hadoop.hive.ql.session.SessionState.createSessionDirs(SessionState.java:659)
+        at org.apache.hadoop.hive.ql.session.SessionState.start(SessionState.java:582)
+        at org.apache.hadoop.hive.ql.session.SessionState.beginStart(SessionState.java:549)
+        at org.apache.hadoop.hive.cli.CliDriver.run(CliDriver.java:750)
+        at org.apache.hadoop.hive.cli.CliDriver.main(CliDriver.java:686)
+        at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+        at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:57)
+        at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+        at java.lang.reflect.Method.invoke(Method.java:601)
+        at org.apache.hadoop.util.RunJar.run(RunJar.java:226)
+        at org.apache.hadoop.util.RunJar.main(RunJar.java:141)
+Caused by: java.net.URISyntaxException: Relative path in absolute URI: ${system:java.io.tmpdir%7D/$%7Bsystem:user.name%7D
+        at java.net.URI.checkPath(URI.java:1804)
+        at java.net.URI.<init>(URI.java:752)
+        at org.apache.hadoop.fs.Path.initialize(Path.java:202)
+        ... 12 more
+```
+
+
+
+```
+[hadoop@h101 conf]$ cat hive-site.xml |grep tmpdir
+    <value>${system:java.io.tmpdir}/${system:user.name}</value>
+    <value>${system:java.io.tmpdir}/${hive.session.id}_resources</value>
+    <value>${system:java.io.tmpdir}/${system:user.name}</value>
+    <description>Local temporary directory used to persist intermediate indexing state, will default to JVM system property java.io.tmpdir.</description>
+    <value>${system:java.io.tmpdir}/${system:user.name}/operation_logs</value>
+```
+
+https://stackoverflow.com/questions/27099898/java-net-urisyntaxexception-when-starting-hive
+
+```
+
+Put the following at the beginning of hive-site.xml
+
+  <property>
+    <name>system:java.io.tmpdir</name>
+    <value>/tmp/hive/java</value>
+  </property>
+  <property>
+    <name>system:user.name</name>
+    <value>${user.name}</value>
+  </property>
+See also question
+```
+
+这里参考stackoverflow的做法。
+
+再hive-site.xml的最前面，加上配置:
+
+```
+  <property>
+    <name>system:java.io.tmpdir</name>
+    <value>/tmp/hive/java</value>
+  </property>
+  <property>
+    <name>system:user.name</name>
+    <value>${user.name}</value>
+  </property>
+```
+
+
+
+启动hive就成功了，配置目录的文件树结构为
+
+```
+[hadoop@h101 tmp]$ pwd
+/tmp
+[hadoop@h101 tmp]$ find hive
+hive
+hive/java
+hive/java/b2b92117-92e3-4f4a-85e8-77d4ea68f7d5_resources
+hive/java/hadoop
+hive/java/hadoop/b2b92117-92e3-4f4a-85e8-77d4ea68f7d5
+hive/java/hadoop/b2b92117-92e3-4f4a-85e8-77d4ea68f7d56766837216493829083.pipeout
+hive/java/hadoop/b2b92117-92e3-4f4a-85e8-77d4ea68f7d52350230507362198461.pipeout
+```
+
+可见：${user.name} 代表当前用户
+
+成功到Hive命令行了
+
+```
+[hadoop@h101 ~]$ hive
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/log4j-slf4j-impl-2.6.2.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/home/hadoop/hadoop-2.7.7/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+
+Logging initialized using configuration in jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/hive-common-2.3.4.jar!/hive-log4j2.properties Async: true
+Hive-on-MR is deprecated in Hive 2 and may not be available in the future versions. Consider using a different execution engine (i.e. tez, spark) or using Hive 1.X releases.
+hive> 
+```
+
+
+
+```
+hive> show databases;
+OK
+default
+Time taken: 9.057 seconds, Fetched: 1 row(s)
+hive> create table test1(tid int, tname string);
+OK
+Time taken: 1.296 seconds
+hive> show tables;
+OK
+test1
+Time taken: 0.083 seconds, Fetched: 1 row(s)
+hive> drop table test1;
+OK
+Time taken: 3.172 seconds
+hive> quit;
+
+```
+
+新建表的时候，mysql中tbl表也有一条记录
+
+| TBL_ID | CREATE_TIME | DB_ID | LAST_ACCESS_TIME | OWNER  | RETENTION | SD_ID | TBL_NAME | TBL_TYPE      | VIEW_EXPANDED_TEXT | VIEW_ORIGINAL_TEXT | IS_REWRITE_ENABLED |      |
+| ------ | ----------- | ----- | ---------------- | ------ | --------- | ----- | -------- | ------------- | ------------------ | ------------------ | ------------------ | ---- |
+| 6      | 1547298122  | 1     | 0                | hadoop | 0         | 6     | test1    | MANAGED_TABLE |                    |                    | 0                  |      |
+
+hdfs上也有这样的目录层级
+
+`/user/hive/warehouse/test1`
+
+
+
+新建数据库和表，并且查询数据
+
+```
+hive> create database db2;
+OK
+Time taken: 0.206 seconds
+hive> use db2;
+OK
+```
+
+```
+hive> create table test_hive(id int, name string)
+    > row format delimited fields terminated by '\t'
+    >  stored as textfile; 
+OK
+Time taken: 0.382 seconds
+```
+
+| TBL_ID | CREATE_TIME | DB_ID | LAST_ACCESS_TIME | OWNER  | RETENTION | SD_ID | TBL_NAME      | TBL_TYPE      | VIEW_EXPANDED_TEXT | VIEW_ORIGINAL_TEXT | IS_REWRITE_ENABLED |      |
+| ------ | ----------- | ----- | ---------------- | ------ | --------- | ----- | ------------- | ------------- | ------------------ | ------------------ | ------------------ | ---- |
+| 6      | 1547298122  | 1     | 0                | hadoop | 0         | 6     | test1         | MANAGED_TABLE |                    |                    | 0                  |      |
+| 7      | 1547298521  | **6** | 0                | hadoop | 0         | 7     | **test_hive** | MANAGED_TABLE |                    |                    | 0                  |      |
+
+hdfs路径: `/user/hive/warehouse/db2.db/test_hive`
+
+
+
+加载本地数据
+
+构造:
+
+```
+[hadoop@h101 ~]$ mkdir data
+[hadoop@h101 ~]$ cd data
+[hadoop@h101 data]$ ls
+[hadoop@h101 data]$ vi test_tb.txt
+[hadoop@h101 data]$ cat test_tb.txt 
+101     aa
+102     bb
+103     cc
+```
+
+加载:
+
+```
+hive> load data local inpath '/home/hadoop/data/test_tb.txt' into table test_hive;
+Loading data to table db2.test_hive
+OK
+Time taken: 2.686 seconds
+```
+
+查询：
+
+```
+hive> select * from test_hive;
+OK
+101     aa
+102     bb
+103     cc
+Time taken: 3.64 seconds, Fetched: 3 row(s)
+
+hive> select * from test_hive where id > 101;
+OK
+102     bb
+103     cc
+Time taken: 1.075 seconds, Fetched: 2 row(s)
+```
+
+hdfs上就有test_tb.txt文件了
+```
+/user/hive/warehouse/db2.db/test_hive/test_tb.txt
+```
+
+说明load data local inpath 会把本地文件上传到hdfs上去
 
 
 
@@ -361,6 +638,8 @@ https://cwiki.apache.org/confluence/display/Hive/GettingStarted
 [HIVE 2.3.4 本地安装与部署 （Ubuntu）](https://www.cnblogs.com/standingby/p/10039974.html)
 
 [滴滴云部署 Hadoop2.7.7+Hive2.3.4](https://blog.csdn.net/java060515/article/details/84582381)
+
+[[HIVE 2.3.4 本地安装与部署 （Ubuntu）](https://www.cnblogs.com/standingby/p/10039974.html)](https://www.cnblogs.com/standingby/p/10039974.html)
 
 
 
