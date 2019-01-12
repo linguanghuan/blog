@@ -254,6 +254,56 @@ Use --verbose for detailed stacktrace.
 *** schemaTool failed ***
 ```
 
+
+
+## 失败 --verbose
+
+```
+[hadoop@h101 ~]$  schematool -initSchema -dbType mysql --verbose
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/log4j-slf4j-impl-2.6.2.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/home/hadoop/hadoop-2.7.7/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Metastore connection URL:        jdbc:derby:;databaseName=metastore_db;create=true
+Metastore Connection Driver :    org.apache.derby.jdbc.EmbeddedDriver
+Metastore connection User:       APP
+Starting metastore schema initialization to 2.3.0
+Initialization script hive-schema-2.3.0.mysql.sql
+Connecting to jdbc:derby:;databaseName=metastore_db;create=true
+Connected to: Apache Derby (version 10.10.2.0 - (1582446))
+Driver: Apache Derby Embedded JDBC Driver (version 10.10.2.0 - (1582446))
+Transaction isolation: TRANSACTION_READ_COMMITTED
+0: jdbc:derby:> !autocommit on
+Autocommit status: true
+0: jdbc:derby:> /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */
+Error: Syntax error: Encountered "<EOF>" at line 1, column 64. (state=42X01,code=30000)
+Closing: 0: jdbc:derby:;databaseName=metastore_db;create=true
+org.apache.hadoop.hive.metastore.HiveMetaException: Schema initialization FAILED! Metastore state would be inconsistent !!
+Underlying cause: java.io.IOException : Schema script failed, errorcode 2
+org.apache.hadoop.hive.metastore.HiveMetaException: Schema initialization FAILED! Metastore state would be inconsistent !!
+        at org.apache.hive.beeline.HiveSchemaTool.doInit(HiveSchemaTool.java:590)
+        at org.apache.hive.beeline.HiveSchemaTool.doInit(HiveSchemaTool.java:563)
+        at org.apache.hive.beeline.HiveSchemaTool.main(HiveSchemaTool.java:1145)
+        at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+        at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:57)
+        at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+        at java.lang.reflect.Method.invoke(Method.java:601)
+        at org.apache.hadoop.util.RunJar.run(RunJar.java:226)
+        at org.apache.hadoop.util.RunJar.main(RunJar.java:141)
+Caused by: java.io.IOException: Schema script failed, errorcode 2
+        at org.apache.hive.beeline.HiveSchemaTool.runBeeLine(HiveSchemaTool.java:980)
+        at org.apache.hive.beeline.HiveSchemaTool.runBeeLine(HiveSchemaTool.java:959)
+        at org.apache.hive.beeline.HiveSchemaTool.doInit(HiveSchemaTool.java:586)
+        ... 8 more
+*** schemaTool failed ***
+```
+
+[hadoop@h101 apache-hive-2.3.4-bin]$ grep -rn "jdbc:derby:;databaseName=metastore_db" *
+conf/hive-default.xml.template:545:    <value>jdbc:derby:;databaseName=metastore_db;create=true</value>
+
+
+
 这里为什么还是提示用derby?
 
 https://blog.csdn.net/seashouwang/article/details/77867134
@@ -262,31 +312,47 @@ https://blog.csdn.net/seashouwang/article/details/77867134
 hive2.3初始化mysql不起作用，主要原因是安装包自身有问题。删除该解压文件，使用其他版本。
 ```
 
+尝试了用旧的版本，也没用。
 
 
-http://mirrors.shu.edu.cn/apache/hive/
 
-选择更低版本的hive，只有
+## 问题解决
 
-http://mirrors.shu.edu.cn/apache/hive/hive-1.2.2/
+后面再搜索相关的资料
 
-那就选择hive-1.2.2试下
+https://blog.csdn.net/java060515/article/details/84582381
 
-```
-[hadoop@h101 conf]$ pwd
-/home/hadoop/apache-hive-1.2.2-bin/conf
-[hadoop@h101 conf]$ cp hive-default.xml.template hive-default.xml
+发现这里用的是hive-site.xml而不是hive-default.xml，所以讲hive-defalult.xml重命名为hive-site.xml，就成功了
 
 ```
-
-```
-export JAVA_HOME=/usr/local/java7
-export HADOOP_HOME=/home/hadoop/hadoop-2.7.7
-export HIVE_CONF_DIR=/home/hadoop/apache-hive-1.2.2-bin/conf
-export HIVE_AUX_JARS_PATH=/home/hadoop/apache-hive-1.2.2-bin/lib
+[hadoop@h101 conf]$ mv hive-default.xml hive-site.xml
 ```
 
-参考：
+```
+[hadoop@h101 conf]$ schematool -initSchema -dbType mysql
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/home/hadoop/apache-hive-2.3.4-bin/lib/log4j-slf4j-impl-2.6.2.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/home/hadoop/hadoop-2.7.7/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Metastore connection URL:        jdbc:mysql://h104:3306/hive?createDatabaseIfNotExist=true&useSSL=false
+Metastore Connection Driver :    com.mysql.jdbc.Driver
+Metastore connection User:       hive
+Starting metastore schema initialization to 2.3.0
+Initialization script hive-schema-2.3.0.mysql.sql
+Initialization script completed
+schemaTool completed
+```
+
+
+
+# hive测试
+
+
+
+
+
+## 参考
 
 http://hive.apache.org/index.html
 
@@ -294,5 +360,7 @@ https://cwiki.apache.org/confluence/display/Hive/GettingStarted
 
 [HIVE 2.3.4 本地安装与部署 （Ubuntu）](https://www.cnblogs.com/standingby/p/10039974.html)
 
-[Hive之 hive-1.2.1 + hadoop 2.7.4 集群安装](https://www.cnblogs.com/andy6/p/7536958.html)
+[滴滴云部署 Hadoop2.7.7+Hive2.3.4](https://blog.csdn.net/java060515/article/details/84582381)
+
+
 

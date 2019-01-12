@@ -2,6 +2,8 @@ https://blog.csdn.net/weixin_40803329/article/details/80801216
 
 
 
+## hadoop
+
 http://hbase.apache.org/book.html#arch.overview
 
 搜索:Not tested
@@ -48,11 +50,15 @@ https://hadoop.apache.org/releases.html
 
 那就选择这个版本了。
 
+## hbase
+
 hbase就选择：
 
-HBase-2.1.x
+还有因为后面与hive兼容的原因，hbase选择1.3.3
 
 
+
+## zookeeper
 
 https://hbase.apache.org/book.html
 
@@ -77,6 +83,8 @@ https://archive.apache.org/dist/zookeeper/stable/
 那当然是选择这个了
 
 
+
+## hive
 
 https://cwiki.apache.org/confluence/display/Hive/GettingStarted#GettingStarted-Requirements
 
@@ -122,7 +130,7 @@ Releases
 
 
 
-所以hbase就选择1.3.3了
+**所以hbase就选择1.3.3了**
 
 
 

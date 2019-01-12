@@ -14,6 +14,10 @@
 
 [hbase集群安装](hbase集群安装.md)
 
+[hive安装](hive安装.md)
+
+
+
 
 
 
