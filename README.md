@@ -2,8 +2,6 @@
 
 [c3集群管理工具](c3集群管理工具.md) 
 
-[flume安装测试](flume安装测试.md)
-
 [hadoop_hbase_zookeeper_hive版本选型](hadoop_hbase_zookeeper_hive版本选型.md)
 
 [hadoop集群安装](hadoop集群安装.md)
@@ -20,7 +18,11 @@
 
 [kafka安装测试](kafka安装测试.md)
 
+[flume安装测试](flume安装测试.md)
+
 [日志系统搭建](日志系统搭建.md)
+
+
 
 
 

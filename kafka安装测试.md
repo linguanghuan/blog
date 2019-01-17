@@ -289,6 +289,210 @@ ctrl +c 停止后，再加-deamon参数后台启动
 
 
 
+## 集群测试
+
+
+
+```
+[app@h101 ~]$ kafka-topics.sh --create --zookeeper h102:2181,h103:2181,h104:2181 --replication-factor 3 --partitions 4 --topic topic111
+Created topic "topic111".
+
+```
+
+zookeeper中的数据变化
+
+```
+[zk: localhost:2181(CONNECTED) 14] ls /brokers/topics
+[topic111]
+
+```
+
+只通过一台zookeeper也可以创建
+
+```
+[app@h101 ~]$ kafka-topics.sh --create --zookeeper h104:2181 --replication-factor 2 --partitions 1 --topic topic222
+Created topic "topic222"
+```
+
+```
+[zk: localhost:2181(CONNECTED) 15] ls /brokers/topics
+[topic111, topic222]
+```
+
+
+
+```
+ kafka-topics.sh --describe --zookeeper h103:2181 --topic topic111
+```
+
+
+
+查看topic属性
+
+
+
+```
+[app@h101 ~]$ kafka-topics.sh --describe --zookeeper h103:2181 --topic topic111
+Topic:topic111	PartitionCount:4	ReplicationFactor:3	Configs:
+	Topic: topic111	Partition: 0	Leader: 2	Replicas: 2,3,1	Isr: 2,3,1
+	Topic: topic111	Partition: 1	Leader: 3	Replicas: 3,1,2	Isr: 3,1,2
+	Topic: topic111	Partition: 2	Leader: 1	Replicas: 1,2,3	Isr: 1,2,3
+	Topic: topic111	Partition: 3	Leader: 2	Replicas: 2,1,3	Isr: 2,1,3
+
+通过任意一个zookeeper都可以:
+
+[app@h101 ~]$ kafka-topics.sh --describe --zookeeper h103:2181 --topic topic222
+Topic:topic222	PartitionCount:1	ReplicationFactor:2	Configs:
+	Topic: topic222	Partition: 0	Leader: 1	Replicas: 1,2	Isr: 1,2
+[app@h101 ~]$ kafka-topics.sh --describe --zookeeper h102:2181 --topic topic222
+Topic:topic222	PartitionCount:1	ReplicationFactor:2	Configs:
+	Topic: topic222	Partition: 0	Leader: 1	Replicas: 1,2	Isr: 1,2
+
+```
+
+
+
+发送消息
+
+```
+[app@h101 ~]$ kafka-console-producer.sh --broker-list h102:9092 -topic topic111
+>111111111111
+>1111111111111
+>^C[app@h101 ~]$ 
+```
+
+接收消息
+
+消息是发往102这个broker的，但是从h103也能接收到
+
+```
+[app@h101 ~]$ kafka-console-consumer.sh --bootstrap-server  h103:9092  --from-beginning --topic topic111
+1111111111111
+111111111111
+
+```
+
+
+
+h103上也启动，从h101消费消息，去掉--from-beginning, 会消费后面的消息
+
+```
+[app@h103 ~]$ kafka-console-consumer.sh --bootstrap-server  h101:9092  --topic topic111
+111111111111111111111111111
+1111111111111111111111111111111111
+
+```
+
+同时另外一个consumer也能收到消息，说明是广播的形式
+
+```
+[app@h101 ~]$ kafka-console-consumer.sh --bootstrap-server  h103:9092  --from-beginning --topic topic111
+1111111111111
+111111111111
+11111111
+11111111111111111111111111111
+111111111111111111111111111
+1111111111111111111111111111111111
+```
+
+
+
+consumer offsets
+
+```
+[zk: localhost:2181(CONNECTED) 17] ls /brokers/topics
+[topic111, __consumer_offsets, topic222]
+[zk: localhost:2181(CONNECTED) 18] ls /brokers/topics/__consumer_offsets
+[partitions]
+[zk: localhost:2181(CONNECTED) 19] ls /brokers/topics/__consumer_offsets/partitions
+[35, 36, 33, 34, 39, 37, 38, 43, 42, 41, 40, 22, 23, 24, 25, 26, 27, 28, 29, 3, 2, 1, 0, 30, 7, 6, 32, 5, 31, 4, 9, 8, 19, 17, 18, 15, 16, 13, 14, 11, 12, 21, 20, 49, 48, 45, 44, 47, 46, 10]
+[zk: localhost:2181(CONNECTED) 20] ls /brokers/topics/__consumer_offsets/partitions/35
+[state]
+[zk: localhost:2181(CONNECTED) 21] ls /brokers/topics/__consumer_offsets/partitions/35/state
+[]
+
+```
+
+
+
+## 安装kafka-manager
+
+编译下载
+
+https://github.com/yahoo/kafka-manager/releases
+
+这里直接网上找了一个别人编译好的kafka-manager-1.3.3.18.zip
+
+
+
+上传解压
+
+部署到h104吧
+
+```
+[app@h104 ~]$ unzip kafka-manager-1.3.3.18.zip 
+-bash: unzip: 未找到命令
+
+```
+
+```
+[root@h104 ~]# yum install -y zip unzip
+
+```
+
+```
+安装完成之后，就可以解压了
+[app@h104 ~]$ unzip kafka-manager-1.3.3.18.zip 
+```
+
+
+
+```
+[app@h104 ~]$ ln -s kafka-manager-1.3.3.18/ km
+
+[app@h104 conf]$ pwd
+/home/app/km/conf
+[app@h104 conf]$ vi application.conf 
+
+```
+
+```
+
+kafka-manager.zkhosts="h102:2181,h103:2181,h104:2181"
+
+```
+
+
+
+启动
+
+```
+[app@h104 ~]$  /home/app/km/bin/kafka-manager -Dconfig.file=/home/app/km/conf/application.conf -Dhttp.port=33433
+
+```
+
+http://h104:33433/
+
+web上添加集群，主要修改zookeeper配置
+
+```
+h102:2181,h103:2181,h104:2181
+```
+
+其他的根据错误提示，修改就可以了。
+
+
+
+编写启动脚本
+
+> [app@h104 ~]$ vi start_km.sh
+
+```
+nohup /home/app/km/bin/kafka-manager -Dconfig.file=/home/app/km/conf/application.conf -Dhttp.port=33433 > /dev/null 2>&1 &
+```
+
+
+
 ## 参考
 
 http://kafka.apache.org/documentation/#quickstart
@@ -299,9 +503,7 @@ https://www.cnblogs.com/5iTech/articles/6043224.html
 
 [Kafka：Configured broker.id 2 doesn't match stored broker.id 0 in meta.properties.](https://www.cnblogs.com/gudi/p/7847100.html)
 
+[kafka管理器kafka-manager部署安装](https://www.cnblogs.com/yinchengzhe/p/5126360.html)
 
-
-
-
-
+[kafka-manager-1.3.3.18 【已编译，上传修改zookeeper直接使用】](https://blog.csdn.net/qq_20793353/article/details/81115216)
 
