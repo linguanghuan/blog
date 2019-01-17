@@ -507,3 +507,5 @@ https://www.cnblogs.com/5iTech/articles/6043224.html
 
 [kafka-manager-1.3.3.18 【已编译，上传修改zookeeper直接使用】](https://blog.csdn.net/qq_20793353/article/details/81115216)
 
+[kafka管理神器-kafkamanager](https://www.cnblogs.com/wangfengxia/p/9627148.html)
+
