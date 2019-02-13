@@ -35,7 +35,7 @@ These are all standard Gradle commands. Please look at Gradle documentation for 
 
 github找到最新的发布版本（2018.9.26）
 
-![1550022036858](C:\Users\gh\AppData\Roaming\Typora\typora-user-images\1550022036858.png)
+![1550022036858](images/1550022036858.png)
 
 h101新建编译的用户，编译的工作运行在这个用户上
 
@@ -161,7 +161,7 @@ git version 1.8.3.1
 
 
 
-![1550024906118](C:\Users\gh\AppData\Roaming\Typora\typora-user-images\1550024906118.png)
+![1550024906118](images/1550024906118.png)
 
 碰到这类错误，直接重新运行
 
