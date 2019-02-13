@@ -255,6 +255,390 @@ rm -rf /home/compile/.gradle/caches/modules-2/files-2.1/mysql/mysql-connector-ja
 
 ## 安装
 
+### Solo Server
+
+上传文件
+
+```
+[app@h101 ~]$ mkdir az
+[app@h101 ~]$ cd az
+[app@h101 az]$ ls
+azkaban-solo-server-3.57.0.tar.gz
+[app@h101 az]$tar -zxvf azkaban-solo-server-3.57.0.tar.gz
+
+[app@h101 az]$ mv azkaban-solo-server-0.1.0-SNAPSHOT azkaban-solo-server-3.57.0
+[app@h101 az]$ 
+
+启动
+[app@h101 az]$ cd azkaban-solo-server-3.57.0
+[app@h101 azkaban-solo-server-3.57.0]$ bin/start-solo.sh 
+[app@h101 azkaban-solo-server-3.57.0]$ jps
+4251 AzkabanSingleServer
+
+```
+
+访问： http://h101:8081/
+
+
+
+```
+[app@h101 conf]$ pwd
+/home/app/az/azkaban-solo-server-3.57.0/conf
+[app@h101 conf]$ more azkaban-users.xml 
+<azkaban-users>
+  <user groups="azkaban" password="azkaban" roles="admin" username="azkaban"/>
+  <user password="metrics" roles="metrics" username="metrics"/>
+
+  <role name="admin" permissions="ADMIN"/>
+  <role name="metrics" permissions="METRICS"/>
+</azkaban-users>
+
+```
+
+用azkaban/azkaban登录成功
+
+测试：
+
+https://azkaban.readthedocs.io/en/latest/createFlows.html
+
+- [basicFlow20Project.zip](https://github.com/azkaban/azkaban/blob/master/az-examples/flow20-projects/basicFlow20Project.zip)
+- [embeddedFlow20Project.zip](https://raw.githubusercontent.com/azkaban/azkaban/master/az-examples/flow20-projects/embeddedFlow20Project.zip)
+
+这里直接下载以上的zip包，上传到azkaban的一个项目运行成功
+
+
+
+### Multi Executor Server
+
+https://azkaban.readthedocs.io/en/latest/getStarted.html#getting-started-with-the-multi-executor-server
+
+#### 配置mysql
+
+```
+[root@h104 ~]# service mysqld start
+Redirecting to /bin/systemctl start mysqld.service
+
+```
+
+
+
+```
+CREATE DATABASE azkaban;
+
+CREATE USER 'azkaban'@'%' IDENTIFIED BY 'azkaban';
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON azkaban.* to 'azkaban'@'%' WITH GRANT OPTION;
+```
+
+
+
+Mysql Packet Size may need to be re-configured. MySQL may have, by default, a ridiculously low allowable packet size. To increase it, you’ll need to have the property max_allowed_packet set to a higher number, say 1024M. To configure this in linux, open /etc/my.cnf. Somewhere after mysqld, add the following:
+
+```
+[mysqld]
+...
+max_allowed_packet=1024M
+```
+
+To restart MySQL, you can run:
+
+```
+$ sudo /sbin/service mysqld restart
+```
+
+
+
+```
+[root@h104 etc]# vi my.cnf
+...
+max_allowed_packet=1024M
+[root@h104 etc]# service mysqld restart
+Redirecting to /bin/systemctl restart mysqld.service
+
+```
+
+
+
+执行以下sql文件
+
+```
+azkaban-db-3.57.0.tar.gz\azkaban-db-0.1.0-SNAPSHOT\create-all-sql-0.1.0-SNAPSHOT.sql
+```
+
+报错：
+
+```
+[SQL]CREATE TABLE active_executing_flows (
+  exec_id     INT,
+  update_time BIGINT,
+  PRIMARY KEY (exec_id)
+);
+[Err] 1142 - CREATE command denied to user 'azkaban'@'h1' for table 'active_executing_flows'
+
+
+```
+
+授权所有权限
+
+```
+GRANT ALL ON azkaban.* to 'azkaban'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES
+```
+
+再执行sql文件就成功了。
+
+#### 安装Azkaban Executor Server
+
+```
+[app@h101 ~]$ mkdir az
+[app@h101 ~]$ cd az
+上传
+[app@h101 az]$ ls
+azkaban-exec-server-3.57.0.tar.gz
+[app@h101 az]$ tar -zxvf azkaban-exec-server-3.57.0.tar.gz 
+
+[app@h101 az]$ mv azkaban-exec-server-0.1.0-SNAPSHOT azkaban-exec-server-3.57.0
+
+[app@h101 conf]$ pwd
+/home/app/az/azkaban-exec-server-3.57.0/conf
+[app@h101 conf]$ vi azkaban.properties 
+
+```
+
+这里主要修改azkaban.webserver.url和mysql.host就好了，azkaban.webserver.url等webserver部署好了再修改
+
+```
+azkaban.webserver.url=http://localhost:8081
+
+...
+# Azkaban mysql settings by default. Users should configure their own username and password.
+database.type=mysql
+mysql.port=3306
+mysql.host=h104
+mysql.database=azkaban
+mysql.user=azkaban
+mysql.password=azkaban
+mysql.numconnections=100
+...
+```
+
+
+
+启动
+
+```
+[app@h101 bin]$ pwd
+/home/app/az/azkaban-exec-server-3.57.0/bin
+[app@h101 bin]$ ./start-exec.sh 
+[app@h101 bin]$ 
+
+```
+
+检查日志文件
+
+```
+[app@h101 logs]$ pwd
+/home/app/az/azkaban-exec-server-3.57.0/bin/logs
+[app@h101 logs]$ ls
+azkaban-execserver.log
+
+```
+
+启动失败报错：conf/global.properties (没有那个文件或目录)
+
+```
+2019/02/13 17:08:05.608 +0800 ERROR [StdOutErrRedirect] [Azkaban] Exception in thread "main" 
+2019/02/13 17:08:05.622 +0800 ERROR [StdOutErrRedirect] [Azkaban] com.google.inject.ProvisionException: Unable to provision, see the following errors:
+
+1) Error injecting constructor, java.io.FileNotFoundException: conf/global.properties (没有那个文件或目录)
+  at azkaban.execapp.FlowRunnerManager.<init>(FlowRunnerManager.java:154)
+  at azkaban.execapp.FlowRunnerManager.class(FlowRunnerManager.java:96)
+  while locating azkaban.execapp.FlowRunnerManager
+    for the 3rd parameter of azkaban.execapp.AzkabanExecutorServer.<init>(AzkabanExecutorServer.java:110)
+  at azkaban.execapp.AzkabanExecutorServer.class(AzkabanExecutorServer.java:82)
+  while locating azkaban.execapp.AzkabanExecutorServer
+
+```
+
+
+
+这里是应该在程序目录执行，而不要直接在bin目录执行
+
+```
+[app@h101 azkaban-exec-server-3.57.0]$ bin/start-exec.sh 
+
+```
+
+这样就启动成功了
+
+```
+2019/02/13 17:12:02.631 +0800 INFO [AzkabanExecutorServer] [Azkaban] Started Executor Server on h101:38164
+
+```
+
+#### 安装web server
+
+```
+[app@h101 az]$ pwd
+/home/app/az
+[app@h101 az]$ tar -zxvf azkaban-web-server-3.57.0.tar.gz 
+[app@h101 az]$ mv azkaban-web-server-0.1.0-SNAPSHOT azkaban-web-server-3.57.0
+
+
+
+```
+
+修改配置
+
+```
+[app@h101 az]$ cd azkaban-web-server-3.57.0
+[app@h101 azkaban-web-server-3.57.0]$ cd conf
+[app@h101 conf]$ pwd
+/home/app/az/azkaban-web-server-3.57.0/conf
+[app@h101 conf]$ vi azkaban.properties 
+mysql.host=h104
+```
+
+
+
+
+
+启动
+
+```
+[app@h101 azkaban-web-server-3.57.0]$ pwd
+/home/app/az/azkaban-web-server-3.57.0
+[app@h101 azkaban-web-server-3.57.0]$ bin/start-web.sh 
+```
+
+
+
+查看日志：
+
+```
+Caused by: azkaban.executor.ExecutorManagerException: No active executor found
+	at azkaban.executor.ExecutorManager.setupExecutors(ExecutorManager.java:253)
+	at azkaban.executor.ExecutorManager.<init>(ExecutorManager.java:131)
+	at azkaban.executor.ExecutorManager$$FastClassByGuice$$e1c1dfed.newInstance(<generated>)
+	at com.google.inject.internal.DefaultConstructionProxyFactory$FastClassProxy.newInstance(DefaultConstructionProxyFactory.java:89)
+	at com.google.inject.internal.ConstructorInjector.provision(ConstructorInjector.java:111)
+	at com.google.inject.internal.ConstructorInjector.construct(ConstructorInjector.java:90)
+	at com.google.inject.internal.ConstructorBindingImpl$Factory.get(ConstructorBindingImpl.java:268)
+
+```
+看来要先激活一个exec才能启动成功server
+
+http://h101:38164/executor?action=activate
+
+```
+{
+status: "success"
+}
+```
+
+激活成功
+
+再启动webserver
+
+启动成功
+
+#### 测试
+
+拷贝到其他机器
+
+```
+[app@h101 ~]$ scp -r az h102:/home/app/az
+[app@h101 ~]$ scp -r az h103:/home/app/az
+
+```
+
+h102和h103启动exec-server
+
+```
+2019/02/13 20:01:46.340 +0800 INFO [AzkabanExecutorServer] [Azkaban] Started Executor Server on h102:40749
+
+```
+
+激活 http://h102:40749/executor?action=activate
+
+```
+2019/02/13 20:02:24.146 +0800 INFO [AzkabanExecutorServer] [Azkaban] Started Executor Server on h103:43794
+
+```
+
+激活  http://h103:43794/executor?action=activate
+
+
+
+h101启动web-server
+
+```
+2019/02/13 20:07:45.904 +0800 INFO [ExecutorManager] [Azkaban] Successfully refreshed executor: h103:43794 (id: 3) with executor info : ExecutorInfo{remainingMemoryPercent=90.17824876690922, remainingMemoryInMB=1803, remainingFlowCapacity=30, numberOfAssignedFlows=0, lastDispatchedTime=0, cpuUsage=0.0}
+2019/02/13 20:07:45.917 +0800 INFO [ExecutorManager] [Azkaban] Successfully refreshed executor: h102:40749 (id: 2) with executor info : ExecutorInfo{remainingMemoryPercent=90.05401181813743, remainingMemoryInMB=1800, remainingFlowCapacity=30, numberOfAssignedFlows=0, lastDispatchedTime=0, cpuUsage=0.0}
+
+```
+
+测试任务
+
+![1550060313197](C:\Users\gh\AppData\Roaming\Typora\typora-user-images\1550060313197.png)
+
+状态一直是preparing
+
+报错
+
+```
+2019/02/13 20:11:04.150 +0800 ERROR [FlowTriggerScheduler] [Azkaban] unable to get scheduled flow triggers
+java.lang.NullPointerException
+	at azkaban.flowtrigger.quartz.FlowTriggerScheduler.getScheduledFlowTriggerJobs(FlowTriggerScheduler.java:132)
+	at azkaban.webapp.servlet.FlowTriggerServlet.handlePage(FlowTriggerServlet.java:140)
+	at azkaban.webapp.servlet.FlowTriggerServlet.handleGet(FlowTriggerServlet.java:55)
+	at azkaban.webapp.servlet.LoginAbstractAzkabanServlet.doGet(LoginAbstractAzkabanServlet.java:123)
+	at javax.servlet.http.HttpServlet.service(HttpServlet.java:668)
+	at javax.servlet.http.HttpServlet.service(HttpServlet.java:770)
+	at org.mortbay.jetty.servlet.ServletHolder.handle(ServletHolder.java:511)
+	at org.mortbay.jetty.servlet.ServletHandler.handle(ServletHandler.java:401)
+	at org.mortbay.jetty.servlet.SessionHandler.handle(SessionHandler.java:182)
+	at org.mortbay.jetty.handler.ContextHandler.handle(ContextHandler.java:766)
+	at org.mortbay.jetty.handler.HandlerWrapper.handle(HandlerWrapper.java:152)
+	at org.mortbay.jetty.Server.handle(Server.java:326)
+	at org.mortbay.jetty.HttpConnection.handleRequest(HttpConnection.java:542)
+	at org.mortbay.jetty.HttpConnection$RequestHandler.headerComplete(HttpConnection.java:928)
+	at org.mortbay.jetty.HttpParser.parseNext(HttpParser.java:549)
+	at org.mortbay.jetty.HttpParser.parseAvailable(HttpParser.java:212)
+	at org.mortbay.jetty.HttpConnection.handle(HttpConnection.java:404)
+	at org.mortbay.jetty.bio.SocketConnector$Connection.run(SocketConnector.java:228)
+	at org.mortbay.thread.QueuedThreadPool$PoolThread.run(QueuedThreadPool.java:582)
+
+```
+
+
+
+https://github.com/azkaban/azkaban/issues/1917
+
+以上描述是一样的，但是看着不知道怎么解决
+
+尝试弄一个定时任务，因为还有正在运行中的任务，定时任务也是失败的，那么把prepare状态的kill掉，再试下
+
+```
+2019/02/13 20:21:44.929 +0800 ERROR [TriggerManager] [Azkaban] Failed to do action Execute flow basic from project lingh for Trigger Id: 1, Description: Trigger from SimpleTimeTrigger with trigger condition of BasicTimeChecker_1.eval() and expire condition of EndTimeChecker_1.eval(), Execute flow basic from project lingh
+java.lang.RuntimeException: azkaban.executor.ExecutorManagerException: Flow basic is already running. Skipping execution.
+	at azkaban.trigger.builtin.ExecuteFlowAction.doAction(ExecuteFlowAction.java:232)
+	at azkaban.trigger.TriggerManager$TriggerScannerThread.onTriggerTrigger(TriggerManager.java:363)
+	at azkaban.trigger.TriggerManager$TriggerScannerThread.checkAllTriggers(TriggerManager.java:343)
+	at azkaban.trigger.TriggerManager$TriggerScannerThread.run(TriggerManager.java:297)
+Caused by: azkaban.executor.ExecutorManagerException: Flow basic is already running. Skipping execution.
+	at azkaban.executor.ExecutorManager.submitExecutableFlow(ExecutorManager.java:1111)
+	at azkaban.trigger.builtin.ExecuteFlowAction.doAction(ExecuteFlowAction.java:229)
+	... 3 more
+
+```
+
+没什么差别，依然是报一样的错误
+
+```
+2019/02/13 20:11:04.150 +0800 ERROR [FlowTriggerScheduler] [Azkaban] unable to get scheduled flow triggers
+java.lang.NullPointerException
+```
 
 
 
