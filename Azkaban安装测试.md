@@ -642,10 +642,169 @@ java.lang.NullPointerException
 
 
 
+其实真正的原因是以下日志：
+
+```
+2019/02/14 10:46:12.177 +0800 INFO [ExecutorManager] [Azkaban] Using dispatcher for execution id :7
+2019/02/14 10:46:12.177 +0800 INFO [ExecutorManager] [Azkaban] Reached handleNoExecutorSelectedCase stage for exec 7 with error count 0
+
+```
+
+Reached handleNoExecutorSelectedCase stage for exec 7 with error count 0
+
+没找到满足条件的Executor
+
+参考：
+
+[azkaban任务延迟执行问题跟进](https://blog.csdn.net/hrayha/article/details/77506976)
+
+```
+/**
+
+   * <pre>
+
+   * function to register the static Minimum Reserved Memory filter.
+
+   * NOTE : this is a static filter which means the filter will be filtering based on the system
+
+   * standard which is not
+
+   *        Coming for the passed flow.
+
+   *        This filter will filter out any executors that has the remaining  memory below 6G
+
+   * </pre>
+
+   */
+
+  private static FactorFilter<Executor, ExecutableFlow> getMinimumReservedMemoryFilter() {
+
+    return FactorFilter
+
+        .create(MINIMUMFREEMEMORY_FILTER_NAME, new FactorFilter.Filter<Executor, ExecutableFlow>() {
+
+          private static final int MINIMUM_FREE_MEMORY = 6 * 1024;
+
+ 
+
+          @Override
+
+          public boolean filterTarget(final Executor filteringTarget,
+
+              final ExecutableFlow referencingObject) {
+
+            if (null == filteringTarget) {
+
+              logger.debug(String.format("%s : filtering out the target as it is null.",
+
+                  MINIMUMFREEMEMORY_FILTER_NAME));
+
+              return false;
+
+            }
+
+ 
+
+            final ExecutorInfo stats = filteringTarget.getExecutorInfo();
+
+            if (null == stats) {
+
+              logger.debug(String.format("%s : filtering out %s as it's stats is unavailable.",
+
+                  MINIMUMFREEMEMORY_FILTER_NAME,
+
+                  filteringTarget.toString()));
+
+              return false;
+
+            }
+
+            return stats.getRemainingMemoryInMB() > MINIMUM_FREE_MEMORY;
+
+          }
+
+        });
+
+  }
+
+
+```
+
+
+
+```
+This filter will filter out any executors that has the remaining  memory below 6G
+可用内存必须超过6G的时候才满足条件，6x1024=6144M，回头翻了下不成功时候取到的executor信息（为了确认基本翻了所有失败时候的日志与部分成功时间的日志），果然两台机器都不到6G的可用内存，只要有超过6144的时候都会成功分配executor，到目前为止终于算是成功定位了问题，那么解决方法就是把原配置中
+
+azkaban.executorselector.filters=StaticRemainingFlowSize,MinimumFreeMemory,CpuStatus
+
+更改为
+
+azkaban.executorselector.filters=StaticRemainingFlowSize,CpuStatus
+
+并重启webserver来生效新的配置
+
+PS：这里再说下另外两个filters，如果再出现handleNoExecutorSelectedCase错误基本就是另外两个filters的问题了，StaticRemainingFlowSiz是每个executor可以同时执行30个flow，如果都满了就会分配失败，CpuStatus是指
+
+cpuUsage的值大于等于95的时候分配失败
+后续：设立azkaban执行情况的监控，目前最简单的做法是设置一个每分钟执行的任务，设置任务失败的报警，但本次这种情况由于没有进入到任务执行流程仍然无法监控，同时需要考虑其他维度的监控
+--------------------- 
+作者：hrayha 
+来源：CSDN 
+原文：https://blog.csdn.net/hrayha/article/details/77506976 
+版权声明：本文为博主原创文章，转载请附上博文链接！
+```
+
+虚拟机的内存才1G多，没有6G.
+
+```
+2019/02/14 10:45:22.169 +0800 INFO [ExecutorManager] [Azkaban] Successfully refreshed executor: h102:35284 (id: 4) with executor info : ExecutorInfo{remainingMemoryPercent=90.38452898373785, remainingMemoryInMB=1807, remainingFlowCapacity=30, numberOfAssignedFlows=0, lastDispatchedTime=0, cpuUsage=0.0}
+2019/02/14 10:45:22.178 +0800 INFO [ExecutorManager] [Azkaban] Successfully refreshed executor: h103:43196 (id: 5) with executor info : ExecutorInfo{remainingMemoryPercent=90.13527372173658, remainingMemoryInMB=1802, remainingFlowCapacity=30, numberOfAssignedFlows=0, lastDispatchedTime=0, cpuUsage=0.0}
+
+```
+
+h102 remainingMemoryInMB=1807, 
+
+h103 remainingMemoryInMB=1802, 
+
+
+
+```
+[app@h101 conf]$ pwd
+/home/app/az/azkaban-web-server-3.57.0/conf
+[app@h101 conf]$ vi azkaban.properties 
+```
+
+```
+azkaban.executorselector.filters=StaticRemainingFlowSize,MinimumFreeMemory,CpuStatus
+```
+
+去掉MinimumFreeMemory
+
+重启web-server
+
+```
+[app@h101 azkaban-web-server-3.57.0]$ bin/shutdown-web.sh 
+Killing web-server. [pid: 1330], attempt: 1
+shutdown succeeded
+[app@h101 azkaban-web-server-3.57.0]$ bin/start-web.sh 
+
+```
+
+再运行basic流程，运行成功。
+
+![1550113154189](images\1550113154189.png)
+
+
+
+
+
+
+
 
 ## 参考
 
 https://azkaban.readthedocs.io/en/latest/
 
-
+[azkaban任务延迟执行问题跟进](https://blog.csdn.net/hrayha/article/details/77506976)
 
