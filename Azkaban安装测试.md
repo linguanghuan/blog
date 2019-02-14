@@ -584,7 +584,7 @@ h101启动web-server
 
 状态一直是preparing
 
-报错
+#### 报错
 
 ```
 2019/02/13 20:11:04.150 +0800 ERROR [FlowTriggerScheduler] [Azkaban] unable to get scheduled flow triggers
@@ -640,7 +640,7 @@ Caused by: azkaban.executor.ExecutorManagerException: Flow basic is already runn
 java.lang.NullPointerException
 ```
 
-
+#### 解决
 
 其实真正的原因是以下日志：
 
@@ -793,9 +793,7 @@ shutdown succeeded
 
 再运行basic流程，运行成功。
 
-![1550113154189](images\1550113154189.png)
-
-
+![1550113154189](images/1550113154189.png)
 
 
 
