@@ -793,14 +793,64 @@ shutdown succeeded
 
 再运行basic流程，运行成功。
 
-![1550113154189](images/1550113154189.png)
+​![1550113154189](images/1550113154189.png)o
 
 
 
+## 本地idea调试代码
+
+1. gradle默认用官方渠道去下载依赖最终环境能设置成功（指向maven私服有有些依赖下载失败，最终idea环境报错）
+
+报错：azkaban java.lang.StackOverflowError 
+
+```
+报错：Exception: java.lang.StackOverflowError thrown from the UncaughtExceptionHandler in thread "main"
+
+```
+
+问题原因：缺少log4j.properties  （参考：https://blog.csdn.net/daiyutage/article/details/69526021）
+
+![1550194505560](images/1550194505560.png)
 
 
 
-## 参考
+将文件 从conf移动出来到上层目录.
+
+不再报错StackOverflowError，换了一个错误了。
+
+```
+2019/02/15 09:27:21.037 +0800 INFO [AzkabanExecutorServer] [Azkaban] Starting Jetty Azkaban Executor...
+2019/02/15 09:28:37.323 +0800 INFO [AzkabanServer] [Azkaban] Conf parameter not set, attempting to get value from AZKABAN_HOME env.
+2019/02/15 09:28:37.335 +0800 ERROR [AzkabanServer] [Azkaban] AZKABAN_HOME not set. Will try default.
+Disconnected from the target VM, address: '127.0.0.1:1815', transport: 'socket'
+2019/02/15 09:29:46.303 +0800 ERROR [AzkabanExecutorServer] [Azkaban] Azkaban Properties not loaded.
+2019/02/15 09:29:46.303 +0800 ERROR [AzkabanExecutorServer] [Azkaban] Exiting Azkaban Executor Server...
+```
+
+调试源码，发现会从命令行解析配置文件位置。
+
+linux的启动脚本也有相关设置。
+
+```
+java -Xmx3G -Dlog4j.configuration=file:bin/internal/../../conf/log4j.properties -Dlog4j.log.dir=bin/internal/../../logs -server -Dcom.sun.management.jmxremote -Djava.io.tmpdir=/tmp -Dexecutorport= -Dserverpath=/home/app/az/azkaban-exec-server-3.57.0 -cp :bin/internal/../../lib/activation-1.1.jar:bin/internal/../../lib/aopalliance-1.0.jar:...... azkaban.execapp.AzkabanExecutorServer -conf bin/internal/../../conf
+
+```
+
+
+
+以上配置是绝对路径。
+
+先获取当前工作目录，再基于工作目录配置
+
+```
+System.getProperty("user.dir")
+```
+
+```
+D:\javacode3\azkaban-3.57.0
+```
+
+
 
 https://azkaban.readthedocs.io/en/latest/
 
